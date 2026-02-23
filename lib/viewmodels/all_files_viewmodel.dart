@@ -14,6 +14,10 @@ class AllFilesViewModel extends ChangeNotifier {
   SortOption currentSort = SortOption.filename;
   bool isDescending = false; // Default: A-Z
 
+  bool isGridView = false;
+  bool isSelectionMode = false;
+  Set<String> selectedPaths = {};
+
   String get itemCountString {
     if (items.isEmpty) return '0 items in total';
 
@@ -190,5 +194,37 @@ class AllFilesViewModel extends ChangeNotifier {
       // Handle permission or creation errors
       debugPrint('Failed to create file: $e');
     }
+  }
+
+  void toggleGridView() {
+    isGridView = !isGridView;
+    notifyListeners();
+  }
+
+  void toggleSelectionMode() {
+    isSelectionMode = !isSelectionMode;
+    if (!isSelectionMode) {
+      selectedPaths.clear();
+    }
+    notifyListeners();
+  }
+
+  void toggleSelection(String path) {
+    if (selectedPaths.contains(path)) {
+      selectedPaths.remove(path);
+    } else {
+      selectedPaths.add(path);
+    }
+    notifyListeners();
+  }
+
+  void selectAll() {
+    selectedPaths = items.map((e) => e.path).toSet();
+    notifyListeners();
+  }
+
+  void clearSelection() {
+    selectedPaths.clear();
+    notifyListeners();
   }
 }
