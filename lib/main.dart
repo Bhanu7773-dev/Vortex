@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:vortex/theme/app_theme.dart';
-import 'package:vortex/views/home_view.dart';
+import 'package:vortex/views/main_view.dart';
 
 void main() {
   runApp(const VortexApp());
@@ -14,7 +14,7 @@ class VortexApp extends StatelessWidget {
     return MaterialApp(
       title: 'Vortex',
       theme: AppTheme.trueBlackTheme,
-      home: const HomeView(),
+      home: const MainWrapperView(),
       debugShowCheckedModeBanner: false,
     );
   }

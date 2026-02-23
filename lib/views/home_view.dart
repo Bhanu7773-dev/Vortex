@@ -87,17 +87,6 @@ class HomeView extends StatelessWidget {
             );
           },
         ),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: 1, // 'Files' selected
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.access_time),
-              label: 'Recent',
-            ),
-            BottomNavigationBarItem(icon: Icon(Icons.folder), label: 'Files'),
-          ],
-          onTap: (index) {},
-        ),
       ),
     );
   }
