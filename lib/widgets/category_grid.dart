@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../models/category_model.dart';
 import '../theme/app_theme.dart';
 
@@ -22,7 +23,15 @@ class CategoryGrid extends StatelessWidget {
       itemCount: categories.length,
       itemBuilder: (context, index) {
         final category = categories[index];
-        return _CategoryCard(category: category);
+        return _CategoryCard(category: category)
+            .animate()
+            .fade(duration: 400.ms, delay: (50 * index).ms)
+            .slideY(
+              begin: 0.2,
+              end: 0,
+              duration: 400.ms,
+              curve: Curves.easeOutQuad,
+            );
       },
     );
   }
