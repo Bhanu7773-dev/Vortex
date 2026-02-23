@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../services/storage_service.dart';
 
 class PhotoAlbum {
   final String name;
@@ -39,11 +40,16 @@ class PhotosViewModel extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
 
-    final root = Directory('/storage/emulated/0');
     // Map from folder path -> list of photo files in that folder (non-recursive)
     final Map<String, List<File>> folderMap = {};
 
-    await _scanForAlbums(root, folderMap);
+    final volumes = await StorageService().getStorageVolumes();
+    for (final vol in volumes) {
+      final root = Directory(vol.path);
+      if (await root.exists()) {
+        await _scanForAlbums(root, folderMap);
+      }
+    }
 
     // Build album list — only folders that have at least 1 photo
     final result = <PhotoAlbum>[];
@@ -85,18 +91,24 @@ class PhotosViewModel extends ChangeNotifier {
           )
           .toList();
 
-      final subDirs = children
-          .whereType<Directory>()
-          .where((d) => d.path.split('/').last != 'Android')
-          .toList();
-
       if (photos.isNotEmpty) {
         map[dir.path] = photos;
       }
 
       // Recurse into subdirs
-      for (final subDir in subDirs) {
-        await _scanForAlbums(subDir, map);
+      for (final child in children.whereType<Directory>()) {
+        try {
+          final name = child.path.split('/').last;
+          if (name == 'Android') {
+            // Special case for Android/media
+            final mediaDir = Directory('${child.path}/media');
+            if (mediaDir.existsSync()) {
+              await _scanForAlbums(mediaDir, map);
+            }
+          } else {
+            await _scanForAlbums(child, map);
+          }
+        } catch (_) {}
       }
     } catch (_) {}
   }
@@ -145,9 +157,13 @@ class PhotoAlbumDetailViewModel extends ChangeNotifier {
       }
     } catch (_) {}
 
-    found.sort(
-      (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
-    );
+    found.sort((a, b) {
+      try {
+        return b.statSync().modified.compareTo(a.statSync().modified);
+      } catch (_) {
+        return 0;
+      }
+    });
     photos = found;
     isLoading = false;
     notifyListeners();

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -658,6 +657,7 @@ class _DocumentsViewState extends State<DocumentsView> {
     'ppt',
     'pptx',
     'txt',
+    'rtf',
     'odt',
     'ofd',
     'csv',

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/category_model.dart';
+import '../models/storage_volume_model.dart';
 import '../services/storage_service.dart';
 import '../services/persistence_service.dart';
 import '../views/all_files_view.dart';
@@ -16,6 +17,10 @@ class HomeViewModel extends ChangeNotifier {
   double storagePercentage = 0.0;
   bool isLoadingStats = true;
   bool isPermissionGranted = false;
+  bool isPermissionDenied = false;
+  bool hasFullAccess = false;
+  Map<String, bool> permissionStatus = {};
+  List<StorageVolume> availableVolumes = [];
 
   HomeViewModel() {
     _init();
@@ -28,6 +33,7 @@ class HomeViewModel extends ChangeNotifier {
 
   Future<void> checkAndRequestPermissions() async {
     isPermissionGranted = await _storageService.requestStoragePermission();
+    isPermissionDenied = !isPermissionGranted;
     if (isPermissionGranted) {
       loadStorageData();
     }
@@ -222,7 +228,12 @@ class HomeViewModel extends ChangeNotifier {
     final List<String>? selectedPaths = await Navigator.push<List<String>>(
       context,
       MaterialPageRoute(
-        builder: (_) => const AllFilesView(isFolderPickerMode: true),
+        builder: (_) => AllFilesView(
+          isFolderPickerMode: true,
+          initialPath: availableVolumes.isNotEmpty
+              ? availableVolumes.first.path
+              : '/storage/emulated/0',
+        ),
       ),
     );
 
@@ -393,14 +404,16 @@ class HomeViewModel extends ChangeNotifier {
         recursive: false,
         followLinks: false,
       )) {
-        if (entity is File) {
-          _countFile(entity.path.split('.').last.toLowerCase(), counts);
-        } else if (entity is Directory) {
-          final name = entity.path.split('/').last;
-          // Skip known fully-restricted subtrees to save time
-          if (name == 'Android') continue;
-          await _scanDir(entity, counts);
-        }
+        try {
+          if (entity is File) {
+            _countFile(entity.path.split('.').last.toLowerCase(), counts);
+          } else if (entity is Directory) {
+            final name = entity.path.split('/').last;
+            // Skip known fully-restricted subtrees to save time
+            if (name == 'Android') continue;
+            await _scanDir(entity, counts);
+          }
+        } catch (_) {}
       }
     } catch (_) {
       // This directory is restricted or inaccessible — skip it
@@ -408,12 +421,18 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   Future<void> _scanCategoryCounts() async {
-    final root = Directory('/storage/emulated/0');
-    if (!await root.exists()) return;
+    final volumes = await _storageService.getStorageVolumes();
+    availableVolumes = volumes;
 
     // Index: [photos, videos, audio, docs, apks, archives]
     final counts = [0, 0, 0, 0, 0, 0];
-    await _scanDir(root, counts);
+
+    for (final vol in volumes) {
+      final root = Directory(vol.path);
+      if (await root.exists()) {
+        await _scanDir(root, counts);
+      }
+    }
 
     categories = [
       CategoryModel(
@@ -461,8 +480,13 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
 
     bool hasPermission = await _storageService.requestStoragePermission();
+    permissionStatus = await _storageService.getPermissionStatus();
+    hasFullAccess = await _storageService.hasAllFilesAccess();
 
     if (hasPermission) {
+      isPermissionGranted = true;
+      isPermissionDenied = false;
+
       double totalGB = await _storageService.getTotalDiskSpaceGB();
       double usedGB = await _storageService.getUsedDiskSpaceGB();
 
@@ -473,9 +497,10 @@ class HomeViewModel extends ChangeNotifier {
         storagePercentage = usedGB / totalGB;
       }
 
-      // Kick off category scan in parallel — UI updates automatically when done
       _scanCategoryCounts();
     } else {
+      isPermissionGranted = false;
+      isPermissionDenied = true;
       totalStorage = 'Permission Denied';
       usedStorage = '0 GB';
       storagePercentage = 0.0;

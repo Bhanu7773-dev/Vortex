@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../services/storage_service.dart';
 
 // ─── Model ───────────────────────────────────
 class VideoAlbum {
@@ -40,7 +41,10 @@ class VideosViewModel extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
     final map = <String, List<File>>{};
-    await _scanDir(Directory('/storage/emulated/0'), map);
+    final volumes = await StorageService().getStorageVolumes();
+    for (final vol in volumes) {
+      await _scanDir(Directory(vol.path), map);
+    }
     albums =
         map.entries
             .where((e) => e.value.isNotEmpty)
@@ -69,8 +73,15 @@ class VideosViewModel extends ChangeNotifier {
           .toList();
       if (videos.isNotEmpty) map[dir.path] = videos;
       for (final sub in children.whereType<Directory>()) {
-        if (sub.path.split('/').last == 'Android') continue;
-        await _scanDir(sub, map);
+        try {
+          final name = sub.path.split('/').last;
+          if (name == 'Android') {
+            final media = Directory('${sub.path}/media');
+            if (media.existsSync()) await _scanDir(media, map);
+          } else {
+            await _scanDir(sub, map);
+          }
+        } catch (_) {}
       }
     } catch (_) {}
   }
@@ -110,9 +121,13 @@ class VideoAlbumDetailViewModel extends ChangeNotifier {
         if (e is File && _exts.contains(e.path.split('.').last.toLowerCase()))
           found.add(e);
       }
-      found.sort(
-        (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
-      );
+      found.sort((a, b) {
+        try {
+          return b.statSync().modified.compareTo(a.statSync().modified);
+        } catch (_) {
+          return 0;
+        }
+      });
       videos = found;
     } catch (_) {}
     isLoading = false;
@@ -173,8 +188,24 @@ class _FileItem {
   _FileItem(this.file)
     : name = file.path.split('/').last,
       ext = file.path.split('.').last.toLowerCase(),
-      sizeBytes = file.statSync().size,
-      modified = file.statSync().modified;
+      sizeBytes = _safeSize(file),
+      modified = _safeModified(file);
+
+  static int _safeSize(File f) {
+    try {
+      return f.statSync().size;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  static DateTime _safeModified(File f) {
+    try {
+      return f.statSync().modified;
+    } catch (_) {
+      return DateTime.now();
+    }
+  }
 
   String get sizeLabel {
     final kb = sizeBytes / 1024;
@@ -221,7 +252,10 @@ class MediaListViewModel extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
     final found = <_FileItem>[];
-    await _scanDir(Directory(rootPath), found);
+    final volumes = await StorageService().getStorageVolumes();
+    for (final vol in volumes) {
+      await _scanDir(Directory(vol.path), found);
+    }
     found.sort((a, b) => b.modified.compareTo(a.modified));
     _allItems = found;
     filteredItems = found;
@@ -232,10 +266,22 @@ class MediaListViewModel extends ChangeNotifier {
   Future<void> _scanDir(Directory dir, List<_FileItem> out) async {
     try {
       await for (final e in dir.list(recursive: false, followLinks: false)) {
-        if (e is File && _exts.contains(e.path.split('.').last.toLowerCase()))
-          out.add(_FileItem(e));
-        else if (e is Directory && e.path.split('/').last != 'Android')
-          await _scanDir(e, out);
+        try {
+          if (e is File &&
+              _exts.contains(e.path.split('.').last.toLowerCase())) {
+            out.add(_FileItem(e));
+          } else if (e is Directory) {
+            final name = e.path.split('/').last;
+            if (name == 'Android') {
+              final media = Directory('${e.path}/media');
+              if (media.existsSync()) await _scanDir(media, out);
+            } else {
+              await _scanDir(e, out);
+            }
+          }
+        } catch (_) {
+          // Skip problematic item and continue scanning
+        }
       }
     } catch (_) {}
   }

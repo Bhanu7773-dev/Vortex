@@ -1,53 +1,110 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
+import '../models/storage_volume_model.dart';
 import 'package:disk_space_2/disk_space_2.dart';
 
 class StorageService {
+  /// Returns a list of available storage volumes (Internal + SD Cards).
+  Future<List<StorageVolume>> getStorageVolumes() async {
+    List<StorageVolume> volumes = [
+      StorageVolume(
+        path: '/storage/emulated/0',
+        name: 'Internal Storage',
+        isInternal: true,
+      ),
+    ];
+
+    if (Platform.isAndroid) {
+      try {
+        final dirs = await getExternalStorageDirectories();
+        if (dirs != null) {
+          for (var dir in dirs) {
+            // SD card paths usually look like /storage/XXXX-XXXX/Android/data/com.example.app/files
+            // We want the root: /storage/XXXX-XXXX
+            final pathParts = dir.path.split('/');
+            if (pathParts.length > 2 && pathParts[1] == 'storage') {
+              final volumeId = pathParts[2];
+              if (volumeId != 'emulated' && volumeId != 'self') {
+                final rootPath = '/storage/$volumeId';
+                if (!volumes.any((v) => v.path == rootPath)) {
+                  volumes.add(
+                    StorageVolume(
+                      path: rootPath,
+                      name: 'SD Card ($volumeId)',
+                      isInternal: false,
+                    ),
+                  );
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error detecting SD Card: $e');
+      }
+    }
+    return volumes;
+  }
+
   /// Returns true when the app has enough permission to browse/list files.
   /// On Android 13+: requests READ_MEDIA_* (shows system popup).
   /// On Android ≤ 12: requests READ_EXTERNAL_STORAGE (shows system popup).
   /// MANAGE_EXTERNAL_STORAGE is intentionally NOT requested here because
   /// it always redirects to the Settings page instead of showing a popup.
-  Future<bool> requestStoragePermission() async {
-    // 1. Check for MANAGE_EXTERNAL_STORAGE (Android 11+)
-    if (await Permission.manageExternalStorage.isGranted) {
-      return true;
-    }
+  /// Detailed status of permissions
+  Future<Map<String, bool>> getPermissionStatus() async {
+    return {
+      'manageExternalStorage': await Permission.manageExternalStorage.isGranted,
+      'storage': await Permission.storage.isGranted,
+      'photos': await Permission.photos.isGranted,
+      'videos': await Permission.videos.isGranted,
+      'audio': await Permission.audio.isGranted,
+    };
+  }
 
-    // 2. Android 13+ (SDK 33) — granular media permissions
-    bool isAndroid13OrHigher = false;
+  Future<bool> hasAllFilesAccess() async {
     if (Platform.isAndroid) {
-      // In a real app, you'd check SDK version. Here we check if media permissions are even relevant.
-      isAndroid13OrHigher =
-          await Permission.photos.status != PermissionStatus.restricted;
+      return await Permission.manageExternalStorage.isGranted;
     }
+    return true;
+  }
 
-    if (isAndroid13OrHigher) {
-      final statuses = await [
-        Permission.photos,
-        Permission.videos,
-        Permission.audio,
-      ].request();
+  Future<bool> requestStoragePermission() async {
+    // On Android 11+, we really want MANAGE_EXTERNAL_STORAGE for a file manager.
+    if (Platform.isAndroid) {
+      // 1. Try granular/legacy first just to get basic access
+      bool isAndroid13OrHigher = false;
+      try {
+        // Simple check for SDK 33
+        isAndroid13OrHigher =
+            await Permission.photos.status != PermissionStatus.restricted;
+      } catch (_) {}
 
-      if (statuses.values.every((s) => s.isGranted)) {
+      if (isAndroid13OrHigher) {
+        await [
+          Permission.photos,
+          Permission.videos,
+          Permission.audio,
+        ].request();
+      } else {
+        await Permission.storage.request();
+      }
+
+      // 2. Check if we ALREADY have MANAGE_EXTERNAL_STORAGE
+      if (await Permission.manageExternalStorage.isGranted) {
         return true;
       }
+
+      // 3. Request MANAGE_EXTERNAL_STORAGE if not granted
+      // This will take user to Settings.
+      final status = await Permission.manageExternalStorage.request();
+      return status.isGranted;
     }
 
-    // 3. Legacy storage (Android ≤ 12)
-    final storageStatus = await Permission.storage.request();
-    if (storageStatus.isGranted) {
-      return true;
-    }
-
-    // 4. For full file manager features on Android 11+, we need to request MANAGE_EXTERNAL_STORAGE
-    // This will open the system settings page.
-    if (await Permission.manageExternalStorage.request().isGranted) {
-      return true;
-    }
-
-    return false;
+    // Fallback for non-Android (though this app is focused on Android)
+    return await Permission.storage.request().isGranted;
   }
 
   /// Returns true if the app has full file system access (Android 11+)

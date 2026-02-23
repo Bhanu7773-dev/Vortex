@@ -4,19 +4,57 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/file_item_model.dart';
+import '../models/storage_volume_model.dart';
 import '../services/persistence_service.dart';
+import '../services/storage_service.dart';
 
 enum SortOption { dateModified, size, filename, type }
 
 class AllFilesViewModel extends ChangeNotifier {
   String currentPath;
-  final String rootPath = '/storage/emulated/0';
+  String rootPath;
+  List<StorageVolume> availableVolumes = [];
+  final StorageService _storageService = StorageService();
   List<String> pathHistory = [];
   bool isFolderPickerMode;
   final PersistenceService _persistenceService = PersistenceService();
 
   AllFilesViewModel({String? initialPath, this.isFolderPickerMode = false})
-    : currentPath = initialPath ?? '/storage/emulated/0' {
+    : currentPath = initialPath ?? '/storage/emulated/0',
+      rootPath = '/storage/emulated/0' {
+    if (initialPath != null) {
+      // Try to determine the root from initialPath
+      if (!initialPath.startsWith('/storage/emulated/0')) {
+        final parts = initialPath.split('/');
+        if (parts.length > 2 && parts[1] == 'storage') {
+          rootPath = '/storage/${parts[2]}';
+        }
+      }
+    }
+    _init();
+  }
+
+  Future<void> _init() async {
+    availableVolumes = await _storageService.getStorageVolumes();
+    // Refresh rootPath from the detected volumes for accuracy
+    final currentVol = availableVolumes.firstWhere(
+      (v) => currentPath.startsWith(v.path),
+      orElse: () => availableVolumes.isNotEmpty
+          ? availableVolumes.first
+          : StorageVolume(
+              path: '/storage/emulated/0',
+              name: 'Internal Storage',
+              isInternal: true,
+            ),
+    );
+    rootPath = currentVol.path;
+    _loadDirectory();
+  }
+
+  void switchStorage(StorageVolume volume) {
+    pathHistory.clear();
+    rootPath = volume.path;
+    currentPath = volume.path;
     _loadDirectory();
   }
 
@@ -31,11 +69,24 @@ class AllFilesViewModel extends ChangeNotifier {
   }
 
   String get currentFolderName {
-    if (currentPath == rootPath) return 'Internal Storage';
+    if (currentPath == rootPath) {
+      final vol = availableVolumes.firstWhere(
+        (v) => v.path == rootPath,
+        orElse: () =>
+            StorageVolume(path: rootPath, name: 'Storage', isInternal: true),
+      );
+      return vol.name;
+    }
     return currentPath.split('/').last;
   }
 
   String get displayPath {
+    final vol = availableVolumes.firstWhere(
+      (v) => v.path == rootPath,
+      orElse: () =>
+          StorageVolume(path: rootPath, name: 'Storage', isInternal: true),
+    );
+
     String relativePath = currentPath;
     if (currentPath.startsWith(rootPath)) {
       relativePath = currentPath.substring(rootPath.length);
@@ -48,11 +99,11 @@ class AllFilesViewModel extends ChangeNotifier {
 
     if (parts.length > 3) {
       parts = parts.sublist(parts.length - 3);
-      return 'Internal Storage/../${parts.join('/')}';
+      return '${vol.name}/../${parts.join('/')}';
     } else if (parts.isNotEmpty) {
-      return 'Internal Storage/${parts.join('/')}';
+      return '${vol.name}/${parts.join('/')}';
     }
-    return 'Internal Storage';
+    return vol.name;
   }
 
   List<FileItemModel> items = [];
@@ -205,38 +256,54 @@ class AllFilesViewModel extends ChangeNotifier {
 
       try {
         if (await dir.exists()) {
-          final entities = dir.listSync(recursive: false, followLinks: false);
           List<FileItemModel> freshItems = [];
 
-          for (var entity in entities) {
-            final isDir = entity is Directory;
-            int count = 0;
-
-            if (isDir) {
+          try {
+            final stream = dir.list(recursive: false, followLinks: false);
+            await for (final entity in stream) {
               try {
-                if (!entity.path.split('/').last.startsWith('.')) {
-                  count = entity.listSync(recursive: false).length;
+                final type = await FileSystemEntity.type(entity.path);
+                final isDir = type == FileSystemEntityType.directory;
+                int count = 0;
+
+                if (isDir) {
+                  try {
+                    if (!entity.path.split('/').last.startsWith('.')) {
+                      count = (entity as Directory)
+                          .listSync(recursive: false)
+                          .length;
+                    }
+                  } catch (e) {
+                    // skip count if listing fails
+                  }
+                }
+
+                DateTime modified = DateTime.now();
+                try {
+                  final stat = await entity.stat();
+                  modified = stat.modified;
+                } catch (_) {}
+
+                final name = entity.path.split('/').last;
+
+                if (!name.startsWith('.')) {
+                  freshItems.add(
+                    FileItemModel(
+                      name: name,
+                      path: entity.path,
+                      isDirectory: isDir,
+                      itemCount: count,
+                      modifiedDate: modified,
+                      categoryHint: _inferCategory(name),
+                    ),
+                  );
                 }
               } catch (e) {
-                // skip
+                // skip individual failed entities
               }
             }
-
-            final stat = await entity.stat();
-            final name = entity.path.split('/').last;
-
-            if (!name.startsWith('.')) {
-              freshItems.add(
-                FileItemModel(
-                  name: name,
-                  path: entity.path,
-                  isDirectory: isDir,
-                  itemCount: count,
-                  modifiedDate: stat.modified,
-                  categoryHint: _inferCategory(name),
-                ),
-              );
-            }
+          } catch (e) {
+            debugPrint('Error listing directory: $e');
           }
 
           items = freshItems;

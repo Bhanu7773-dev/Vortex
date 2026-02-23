@@ -26,6 +26,11 @@ class RecentView extends StatelessWidget {
         ),
         body: Consumer<RecentViewModel>(
           builder: (context, viewModel, child) {
+            if (viewModel.isLoading) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppTheme.accentBlue),
+              );
+            }
             if (viewModel.sections.isEmpty) {
               return const Center(
                 child: Column(

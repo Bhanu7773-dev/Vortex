@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:vortex/viewmodels/all_files_viewmodel.dart';
 import 'package:vortex/models/file_item_model.dart';
+import 'package:vortex/models/storage_volume_model.dart';
 import 'package:vortex/theme/app_theme.dart';
 import 'package:vortex/widgets/tag_selection_sheet.dart';
 import 'package:vortex/utils/file_opener.dart';
@@ -161,6 +162,57 @@ class _AllFilesViewState extends State<AllFilesView> {
                     : AppBar(
                         title: Text(viewModel.currentFolderName),
                         actions: [
+                          if (viewModel.availableVolumes.length > 1)
+                            PopupMenuButton<StorageVolume>(
+                              icon: const Icon(
+                                Icons.storage,
+                                color: Colors.white,
+                              ),
+                              tooltip: 'Switch Storage',
+                              color: AppTheme.cardGrey,
+                              onSelected: (vol) => viewModel.switchStorage(vol),
+                              itemBuilder: (context) =>
+                                  viewModel.availableVolumes.map((vol) {
+                                    final isSelected =
+                                        viewModel.rootPath == vol.path;
+                                    return PopupMenuItem<StorageVolume>(
+                                      value: vol,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            vol.isInternal
+                                                ? Icons.phone_android
+                                                : Icons.sd_card,
+                                            color: isSelected
+                                                ? AppTheme.accentBlue
+                                                : Colors.white,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            vol.name,
+                                            style: TextStyle(
+                                              color: isSelected
+                                                  ? AppTheme.accentBlue
+                                                  : Colors.white,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                            ),
+                                          ),
+                                          if (isSelected) ...[
+                                            const SizedBox(width: 8),
+                                            const Icon(
+                                              Icons.check,
+                                              color: AppTheme.accentBlue,
+                                              size: 16,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                            ),
                           PopupMenuButton<String>(
                             icon: const Icon(Icons.add),
                             color: AppTheme.cardGrey,
