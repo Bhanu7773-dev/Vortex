@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -7,8 +8,37 @@ import '../models/file_item_model.dart';
 enum SortOption { dateModified, size, filename, type }
 
 class AllFilesViewModel extends ChangeNotifier {
-  final String currentPath = '/storage/emulated/0';
+  String currentPath = '/storage/emulated/0';
+  final String rootPath = '/storage/emulated/0';
+  List<String> pathHistory = [];
+
+  String get currentFolderName {
+    if (currentPath == rootPath) return 'All files';
+    return currentPath.split('/').last;
+  }
+
+  String get displayPath {
+    String relativePath = currentPath;
+    if (currentPath.startsWith(rootPath)) {
+      relativePath = currentPath.substring(rootPath.length);
+    }
+
+    List<String> parts = relativePath
+        .split('/')
+        .where((p) => p.isNotEmpty)
+        .toList();
+
+    if (parts.length > 3) {
+      parts = parts.sublist(parts.length - 3);
+      return 'Internal Storage/../${parts.join('/')}';
+    } else if (parts.isNotEmpty) {
+      return 'Internal Storage/${parts.join('/')}';
+    }
+    return 'Internal Storage';
+  }
+
   List<FileItemModel> items = [];
+  Map<String, List<FileItemModel>> _cachedDirectories = {};
   bool isLoading = true;
 
   SortOption currentSort = SortOption.filename;
@@ -17,6 +47,20 @@ class AllFilesViewModel extends ChangeNotifier {
   bool isGridView = false;
   bool isSelectionMode = false;
   Set<String> selectedPaths = {};
+
+  // Clipboard State
+  List<String> clipboardPaths = [];
+  bool isCut = false;
+  bool isPasteMode = false;
+
+  // Paste Progress & Cancellation State
+  bool isPasting = false;
+  double pasteProgress = 0.0;
+  String pasteStatus = '';
+  bool _cancelRequested = false;
+  List<String> _pastedDestinationPaths = [];
+  int _totalItemsToPaste = 0;
+  int _itemsPasted = 0;
 
   String get itemCountString {
     if (items.isEmpty) return '0 items in total';
@@ -36,10 +80,18 @@ class AllFilesViewModel extends ChangeNotifier {
   }
 
   Future<void> _loadDirectory() async {
-    isLoading = true;
-    notifyListeners();
+    // 1. Serve from cache instantly if available
+    if (_cachedDirectories.containsKey(currentPath)) {
+      items = _cachedDirectories[currentPath]!;
+      isLoading = false;
+      notifyListeners();
+    } else {
+      items = []; // Ensure previous folder data is cleared before loading
+      isLoading = true;
+      notifyListeners();
+    }
 
-    // Check permission safely - fallback if permission wasn't fully granted beforehand
+    // 2. Fetch fresh data quietly in background
     if (await Permission.manageExternalStorage.isGranted ||
         await Permission.storage.isGranted) {
       final dir = Directory(currentPath);
@@ -47,31 +99,27 @@ class AllFilesViewModel extends ChangeNotifier {
       try {
         if (await dir.exists()) {
           final entities = dir.listSync(recursive: false, followLinks: false);
-
-          items = [];
+          List<FileItemModel> freshItems = [];
 
           for (var entity in entities) {
             final isDir = entity is Directory;
             int count = 0;
 
-            // For folders, count their immediate children
             if (isDir) {
               try {
-                // Ignore hidden folders for speed or permission exceptions
                 if (!entity.path.split('/').last.startsWith('.')) {
                   count = entity.listSync(recursive: false).length;
                 }
               } catch (e) {
-                // Permission denied for specific nested directory, skip count
+                // skip
               }
             }
 
             final stat = await entity.stat();
             final name = entity.path.split('/').last;
 
-            // Optional: skip hidden files/directories entirely (starts with .)
             if (!name.startsWith('.')) {
-              items.add(
+              freshItems.add(
                 FileItemModel(
                   name: name,
                   path: entity.path,
@@ -84,15 +132,133 @@ class AllFilesViewModel extends ChangeNotifier {
             }
           }
 
+          items = freshItems;
           _applySorting();
+
+          // 3. Update cache
+          _cachedDirectories[currentPath] = List.from(items);
         }
       } catch (e) {
-        // Handle read error gracefully
+        // Handle gracefully
       }
     }
 
     isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> deleteSelectedFiles() async {
+    if (selectedPaths.isEmpty) return;
+
+    for (final path in selectedPaths) {
+      try {
+        if (await FileSystemEntity.type(path) ==
+            FileSystemEntityType.directory) {
+          await Directory(path).delete(recursive: true);
+        } else {
+          await File(path).delete();
+        }
+      } catch (e) {
+        debugPrint('Failed to delete $path: $e');
+      }
+    }
+
+    // Remove them locally to preserve scroll state
+    items.removeWhere((item) => selectedPaths.contains(item.path));
+    _cachedDirectories[currentPath] = List.from(items);
+
+    selectedPaths.clear();
+    isSelectionMode = false;
+    notifyListeners();
+  }
+
+  Future<String?> renameSelected(String newName) async {
+    if (selectedPaths.length != 1) return 'Select exactly one item to rename.';
+
+    final oldPath = selectedPaths.first;
+    final parentDir = File(oldPath).parent.path;
+    final newPath = '$parentDir/$newName';
+
+    if (await FileSystemEntity.type(newPath) != FileSystemEntityType.notFound) {
+      return 'A file or folder with this name already exists.';
+    }
+
+    try {
+      final type = await FileSystemEntity.type(oldPath);
+      if (type == FileSystemEntityType.directory) {
+        await Directory(oldPath).rename(newPath);
+      } else {
+        await File(oldPath).rename(newPath);
+      }
+
+      // Preserve scroll state
+      final itemIndex = items.indexWhere((element) => element.path == oldPath);
+      if (itemIndex != -1) {
+        final oldItem = items[itemIndex];
+        items[itemIndex] = FileItemModel(
+          name: newName,
+          path: newPath,
+          isDirectory: oldItem.isDirectory,
+          itemCount: oldItem.itemCount,
+          modifiedDate: DateTime.now(),
+          categoryHint: _inferCategory(newName),
+        );
+        _applySorting();
+        _cachedDirectories[currentPath] = List.from(items);
+      }
+
+      selectedPaths.clear();
+      isSelectionMode = false;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return 'Failed to rename: $e';
+    }
+  }
+
+  Future<Map<String, String>?> getDetailsForSelected() async {
+    if (selectedPaths.length != 1) return null;
+
+    final path = selectedPaths.first;
+    final type = await FileSystemEntity.type(path);
+    final stat = await FileStat.stat(path);
+
+    Map<String, String> details = {
+      'Name': path.split('/').last,
+      'Path': path,
+      'Modified': formatDateString(stat.modified),
+    };
+
+    if (type == FileSystemEntityType.directory) {
+      details['Type'] = 'Folder';
+      try {
+        final dir = Directory(path);
+        int totalItems = 0;
+        await for (var _ in dir.list(recursive: true, followLinks: false)) {
+          totalItems++;
+        }
+        details['Items inside'] = totalItems.toString();
+      } catch (e) {
+        details['Items inside'] = 'Unknown (Permission denied)';
+      }
+    } else {
+      details['Type'] = 'File';
+      details['Size'] = _formatBytes(stat.size);
+    }
+
+    // Unselect automatically after retrieving stats
+    selectedPaths.clear();
+    isSelectionMode = false;
+    notifyListeners();
+
+    return details;
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes <= 0) return "0 B";
+    const suffixes = ["B", "KB", "MB", "GB", "TB"];
+    var i = (log(bytes) / log(1024)).floor();
+    return '${(bytes / pow(1024, i)).toStringAsFixed(2)} ${suffixes[i]}';
   }
 
   String _inferCategory(String folderName) {
@@ -226,5 +392,192 @@ class AllFilesViewModel extends ChangeNotifier {
   void clearSelection() {
     selectedPaths.clear();
     notifyListeners();
+  }
+
+  // --- Navigation Methods ---
+
+  void navigateTo(String path) {
+    pathHistory.add(currentPath);
+    currentPath = path;
+    _loadDirectory(); // Reactively reloads the list using the new currentPath
+  }
+
+  bool goBack() {
+    if (pathHistory.isNotEmpty) {
+      currentPath = pathHistory.removeLast();
+      _loadDirectory();
+      return true; // Handled back navigation
+    }
+    return false; // Did not handle (e.g., at root, OS should close app/tab)
+  }
+
+  // --- Clipboard & Paste Methods ---
+
+  void copySelected() {
+    clipboardPaths = selectedPaths.toList();
+    isCut = false;
+    isPasteMode = true;
+    toggleSelectionMode(); // Exit selection UI
+  }
+
+  void cutSelected() {
+    clipboardPaths = selectedPaths.toList();
+    isCut = true;
+    isPasteMode = true;
+    toggleSelectionMode(); // Exit selection UI
+  }
+
+  void cancelPaste() {
+    clipboardPaths.clear();
+    isPasteMode = false;
+    isCut = false;
+    notifyListeners();
+  }
+
+  void cancelOngoingPaste() {
+    _cancelRequested = true;
+    notifyListeners();
+  }
+
+  Future<int> _countTotalItems(List<String> paths) async {
+    int count = 0;
+    for (final path in paths) {
+      if (await FileSystemEntity.type(path) == FileSystemEntityType.file) {
+        count++;
+      } else if (await FileSystemEntity.type(path) ==
+          FileSystemEntityType.directory) {
+        count++; // count the directory itself
+        try {
+          // recursively count contents
+          await for (var _ in Directory(path).list(recursive: true)) {
+            count++;
+          }
+        } catch (_) {}
+      }
+    }
+    return count;
+  }
+
+  void _updateProgress(String currentFile) {
+    _itemsPasted++;
+    pasteStatus = 'Pasting: $currentFile';
+    if (_totalItemsToPaste > 0) {
+      pasteProgress = _itemsPasted / _totalItemsToPaste;
+    }
+    notifyListeners();
+  }
+
+  Future<String?> pasteClipboard() async {
+    if (clipboardPaths.isEmpty) return null;
+
+    isPasting = true;
+    pasteProgress = 0.0;
+    pasteStatus = 'Calculating...';
+    _cancelRequested = false;
+    _pastedDestinationPaths.clear();
+    _itemsPasted = 0;
+    notifyListeners();
+
+    try {
+      _totalItemsToPaste = await _countTotalItems(clipboardPaths);
+
+      for (final srcPath in clipboardPaths) {
+        if (_cancelRequested) break;
+
+        final entityName = srcPath.split('/').last;
+        final destPath = '$currentPath/$entityName';
+
+        // Duplicate Check Requirement
+        if (await FileSystemEntity.type(destPath) !=
+            FileSystemEntityType.notFound) {
+          throw Exception('"$entityName" already exists here.');
+        }
+
+        final fileType = await FileSystemEntity.type(srcPath);
+
+        if (fileType == FileSystemEntityType.file) {
+          if (isCut) {
+            await File(srcPath).rename(destPath);
+          } else {
+            await File(srcPath).copy(destPath);
+          }
+          _pastedDestinationPaths.add(destPath);
+          _updateProgress(entityName);
+        } else if (fileType == FileSystemEntityType.directory) {
+          if (isCut) {
+            try {
+              await Directory(srcPath).rename(destPath);
+              _pastedDestinationPaths.add(destPath);
+              _updateProgress(entityName);
+            } catch (e) {
+              await Directory(destPath).create(recursive: true);
+              _pastedDestinationPaths.add(destPath);
+              _updateProgress(entityName);
+
+              await _copyDirectory(Directory(srcPath), Directory(destPath));
+              if (!_cancelRequested) {
+                await Directory(srcPath).delete(recursive: true);
+              }
+            }
+          } else {
+            await Directory(destPath).create(recursive: true);
+            _pastedDestinationPaths.add(destPath);
+            _updateProgress(entityName);
+
+            await _copyDirectory(Directory(srcPath), Directory(destPath));
+          }
+        }
+      }
+
+      if (_cancelRequested) {
+        pasteStatus = 'Cancelling... Rolling back.';
+        notifyListeners();
+        // Rollback
+        for (final pastedPath in _pastedDestinationPaths) {
+          try {
+            if (await FileSystemEntity.type(pastedPath) ==
+                FileSystemEntityType.directory) {
+              await Directory(pastedPath).delete(recursive: true);
+            } else {
+              await File(pastedPath).delete();
+            }
+          } catch (_) {}
+        }
+        isPasting = false;
+        notifyListeners();
+        return 'Pasting cancelled.';
+      }
+
+      // Success, cleanup state
+      isPasting = false;
+      cancelPaste();
+      await _loadDirectory();
+      return null; // Return null on success
+    } catch (e) {
+      isPasting = false;
+      notifyListeners();
+      debugPrint('Paste Error: $e');
+      if (e.toString().contains('already exists here.')) {
+        return e.toString().replaceAll('Exception: ', '');
+      }
+      return 'Failed to Paste: $e';
+    }
+  }
+
+  Future<void> _copyDirectory(Directory source, Directory destination) async {
+    await for (var entity in source.list(recursive: false)) {
+      if (_cancelRequested) return;
+
+      final name = entity.path.split('/').last;
+      if (entity is Directory) {
+        var newDir = Directory('${destination.path}/$name');
+        await newDir.create(recursive: true);
+        _updateProgress(name);
+        await _copyDirectory(entity, newDir);
+      } else if (entity is File) {
+        await entity.copy('${destination.path}/$name');
+        _updateProgress(name);
+      }
+    }
   }
 }

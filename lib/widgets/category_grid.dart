@@ -2,11 +2,57 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/category_model.dart';
 import '../theme/app_theme.dart';
+import '../views/photos_view.dart';
+import '../views/videos_view.dart';
+import '../views/media_list_views.dart';
 
 class CategoryGrid extends StatelessWidget {
   final List<CategoryModel> categories;
 
   const CategoryGrid({Key? key, required this.categories}) : super(key: key);
+
+  void _onCategoryTap(BuildContext context, CategoryModel category) {
+    switch (category.name) {
+      case 'Photos':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PhotosView()),
+        );
+        break;
+      case 'Videos':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const VideosView()),
+        );
+        break;
+      case 'Audio':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AudioView()),
+        );
+        break;
+      case 'Archives':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ArchivesView()),
+        );
+        break;
+      case 'APKs':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ApksView()),
+        );
+        break;
+      case 'Documents':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DocumentsView()),
+        );
+        break;
+      default:
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,15 +69,18 @@ class CategoryGrid extends StatelessWidget {
       itemCount: categories.length,
       itemBuilder: (context, index) {
         final category = categories[index];
-        return _CategoryCard(category: category)
-            .animate()
-            .fade(duration: 400.ms, delay: (50 * index).ms)
-            .slideY(
-              begin: 0.2,
-              end: 0,
-              duration: 400.ms,
-              curve: Curves.easeOutQuad,
-            );
+        return GestureDetector(
+          onTap: () => _onCategoryTap(context, category),
+          child: _CategoryCard(category: category)
+              .animate()
+              .fade(duration: 400.ms, delay: (50 * index).ms)
+              .slideY(
+                begin: 0.2,
+                end: 0,
+                duration: 400.ms,
+                curve: Curves.easeOutQuad,
+              ),
+        );
       },
     );
   }

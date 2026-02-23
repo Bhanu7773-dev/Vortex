@@ -14,181 +14,230 @@ class AllFilesView extends StatelessWidget {
       create: (_) => AllFilesViewModel(),
       child: Consumer<AllFilesViewModel>(
         builder: (context, viewModel, child) {
-          return Scaffold(
-            appBar: PreferredSize(
-              preferredSize: const Size.fromHeight(kToolbarHeight),
-              child: viewModel.isSelectionMode
-                  ? AppBar(
-                      leadingWidth: 80,
-                      leading: TextButton(
-                        onPressed: () => viewModel.toggleSelectionMode(),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            color: AppTheme.accentBlue,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                      title: Text('${viewModel.selectedPaths.length} selected'),
-                      centerTitle: true,
-                      actions: [
-                        TextButton(
-                          onPressed: () => viewModel.selectAll(),
+          return PopScope(
+            canPop: viewModel.pathHistory.isEmpty,
+            onPopInvokedWithResult: (didPop, result) {
+              if (!didPop) {
+                viewModel.goBack();
+              }
+            },
+            child: Scaffold(
+              appBar: PreferredSize(
+                preferredSize: const Size.fromHeight(kToolbarHeight),
+                child: viewModel.isSelectionMode
+                    ? AppBar(
+                        leadingWidth: 80,
+                        leading: TextButton(
+                          onPressed: () => viewModel.toggleSelectionMode(),
                           child: const Text(
-                            'Select all',
+                            'Cancel',
                             style: TextStyle(
                               color: AppTheme.accentBlue,
                               fontSize: 16,
                             ),
                           ),
                         ),
-                      ],
-                    )
-                  : AppBar(
-                      title: const Text('All files'),
-                      actions: [
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.add),
-                          color: AppTheme.cardGrey,
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'new_folder',
-                              child: Text(
-                                'New folder',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'add_files',
-                              child: Text(
-                                'Add files',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ),
-                          ],
-                          onSelected: (value) {
-                            if (value == 'new_folder') {
-                              _showCreateDialog(context, viewModel, true);
-                            } else if (value == 'add_files') {
-                              _showCreateDialog(context, viewModel, false);
-                            }
-                          },
+                        title: Text(
+                          '${viewModel.selectedPaths.length} selected',
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: () {},
-                        ),
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert),
-                          color: AppTheme.cardGrey,
-                          itemBuilder: (context) => [
-                            PopupMenuItem(
-                              value: 'grid_view',
-                              child: Text(
-                                viewModel.isGridView
-                                    ? 'List view'
-                                    : 'Grid view',
-                                style: const TextStyle(color: Colors.white),
+                        centerTitle: true,
+                        actions: [
+                          TextButton(
+                            onPressed: () => viewModel.selectAll(),
+                            child: const Text(
+                              'Select all',
+                              style: TextStyle(
+                                color: AppTheme.accentBlue,
+                                fontSize: 16,
                               ),
                             ),
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Text(
-                                'Edit',
-                                style: TextStyle(color: Colors.white),
+                          ),
+                        ],
+                      )
+                    : AppBar(
+                        title: Text(viewModel.currentFolderName),
+                        actions: [
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.add),
+                            color: AppTheme.cardGrey,
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'new_folder',
+                                child: Text(
+                                  'New folder',
+                                  style: TextStyle(color: Colors.white),
+                                ),
                               ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'settings',
-                              child: Text(
-                                'Settings',
-                                style: TextStyle(color: Colors.white),
+                              const PopupMenuItem(
+                                value: 'add_files',
+                                child: Text(
+                                  'Add files',
+                                  style: TextStyle(color: Colors.white),
+                                ),
                               ),
-                            ),
-                          ],
-                          onSelected: (value) {
-                            if (value == 'grid_view') {
-                              viewModel.toggleGridView();
-                            } else if (value == 'edit') {
-                              viewModel.toggleSelectionMode();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-            ),
-            bottomNavigationBar: viewModel.isSelectionMode
-                ? _buildBottomNavBar(context, viewModel)
-                : null,
-            body: Builder(
-              builder: (context) {
-                if (viewModel.isLoading) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      color: AppTheme.accentBlue,
-                    ),
-                  );
-                }
+                            ],
+                            onSelected: (value) {
+                              if (value == 'new_folder') {
+                                _showCreateDialog(context, viewModel, true);
+                              } else if (value == 'add_files') {
+                                _showCreateDialog(context, viewModel, false);
+                              }
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.search),
+                            onPressed: () {},
+                          ),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            color: AppTheme.cardGrey,
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                value: 'grid_view',
+                                child: Text(
+                                  viewModel.isGridView
+                                      ? 'List view'
+                                      : 'Grid view',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Text(
+                                  'Edit',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'settings',
+                                child: Text(
+                                  'Settings',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            ],
+                            onSelected: (value) {
+                              if (value == 'grid_view') {
+                                viewModel.toggleGridView();
+                              } else if (value == 'edit') {
+                                viewModel.toggleSelectionMode();
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+              ),
+              bottomNavigationBar: viewModel.isPasteMode
+                  ? _buildPasteNavBar(context, viewModel)
+                  : viewModel.isSelectionMode
+                  ? _buildSelectionNavBar(context, viewModel)
+                  : null,
+              body: Builder(
+                builder: (context) {
+                  if (viewModel.isLoading) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: AppTheme.accentBlue,
+                      ),
+                    );
+                  }
 
-                return CustomScrollView(
-                  slivers: [
-                    _buildHeader(viewModel),
-                    viewModel.isGridView
-                        ? SliverPadding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16.0,
+                  if (viewModel.items.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.folder_off_outlined,
+                            size: 80,
+                            color: AppTheme.textGrey,
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'This folder is empty',
+                            style: TextStyle(
+                              color: AppTheme.textGrey,
+                              fontSize: 16,
                             ),
-                            sliver: SliverGrid(
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 3,
-                                    mainAxisSpacing: 16,
-                                    crossAxisSpacing: 16,
-                                    childAspectRatio: 0.85,
-                                  ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return CustomScrollView(
+                    slivers: [
+                      _buildHeader(viewModel),
+                      viewModel.isGridView
+                          ? SliverPadding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                              ),
+                              sliver: SliverGrid(
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      mainAxisSpacing: 16,
+                                      crossAxisSpacing: 16,
+                                      childAspectRatio: 0.85,
+                                    ),
+                                delegate: SliverChildBuilderDelegate((
+                                  context,
+                                  index,
+                                ) {
+                                  return _FileGridItem(
+                                        key: ValueKey(
+                                          viewModel.items[index].path,
+                                        ),
+                                        item: viewModel.items[index],
+                                        viewModel: viewModel,
+                                      )
+                                      .animate(
+                                        key: ValueKey(
+                                          '${viewModel.items[index].path}_anim',
+                                        ),
+                                      )
+                                      .fade(duration: 300.ms)
+                                      .scaleXY(
+                                        begin: 0.9,
+                                        end: 1.0,
+                                        curve: Curves.easeOut,
+                                        delay: (10 * index).ms,
+                                      );
+                                }, childCount: viewModel.items.length),
+                              ),
+                            )
+                          : SliverList(
                               delegate: SliverChildBuilderDelegate((
                                 context,
                                 index,
                               ) {
-                                return _FileGridItem(
+                                return _FileListItem(
+                                      key: ValueKey(
+                                        viewModel.items[index].path,
+                                      ),
                                       item: viewModel.items[index],
                                       viewModel: viewModel,
                                     )
-                                    .animate()
+                                    .animate(
+                                      key: ValueKey(
+                                        '${viewModel.items[index].path}_anim',
+                                      ),
+                                    )
                                     .fade(duration: 300.ms)
-                                    .scaleXY(
-                                      begin: 0.9,
-                                      end: 1.0,
+                                    .slideX(
+                                      begin: 0.1,
+                                      end: 0,
                                       curve: Curves.easeOut,
-                                      delay: (10 * index).ms,
+                                      delay: (10 * index)
+                                          .ms, // quick staggered load
                                     );
                               }, childCount: viewModel.items.length),
                             ),
-                          )
-                        : SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              return _FileListItem(
-                                    item: viewModel.items[index],
-                                    viewModel: viewModel,
-                                  )
-                                  .animate()
-                                  .fade(duration: 300.ms)
-                                  .slideX(
-                                    begin: 0.1,
-                                    end: 0,
-                                    curve: Curves.easeOut,
-                                    delay:
-                                        (10 * index).ms, // quick staggered load
-                                  );
-                            }, childCount: viewModel.items.length),
-                          ),
-                  ],
-                );
-              },
+                    ],
+                  );
+                },
+              ),
             ),
           );
         },
@@ -203,14 +252,14 @@ class AllFilesView extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 16.0),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
               child: Text(
-                'All files',
-                style: TextStyle(
+                viewModel.displayPath,
+                style: const TextStyle(
                   color: AppTheme.accentBlue,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
@@ -389,7 +438,56 @@ class AllFilesView extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNavBar(BuildContext context, AllFilesViewModel viewModel) {
+  Widget _buildPasteNavBar(BuildContext context, AllFilesViewModel viewModel) {
+    return BottomNavigationBar(
+      backgroundColor: AppTheme.cardGrey,
+      selectedItemColor: Colors.white,
+      unselectedItemColor: Colors.white,
+      showUnselectedLabels: true,
+      type: BottomNavigationBarType.fixed,
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.close), label: 'Cancel'),
+        BottomNavigationBarItem(icon: Icon(Icons.paste), label: 'Paste'),
+      ],
+      onTap: (index) async {
+        if (index == 0) {
+          viewModel.cancelPaste();
+        } else if (index == 1) {
+          // Show progress dialog
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => PasteProgressDialog(viewModel: viewModel),
+          );
+
+          final error = await viewModel.pasteClipboard();
+
+          // Close progress dialog
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context);
+          }
+
+          if (error != null && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  error,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                backgroundColor: Colors.red.shade800,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
+  Widget _buildSelectionNavBar(
+    BuildContext context,
+    AllFilesViewModel viewModel,
+  ) {
     return BottomNavigationBar(
       backgroundColor: AppTheme.cardGrey,
       selectedItemColor: Colors.white,
@@ -402,10 +500,7 @@ class AllFilesView extends StatelessWidget {
           icon: Icon(Icons.bookmark_border),
           label: 'Tag',
         ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.drive_file_move_outline),
-          label: 'Move',
-        ),
+        BottomNavigationBarItem(icon: Icon(Icons.copy), label: 'Copy'),
         BottomNavigationBarItem(
           icon: Icon(Icons.delete_outline),
           label: 'Delete',
@@ -413,10 +508,50 @@ class AllFilesView extends StatelessWidget {
         BottomNavigationBarItem(icon: Icon(Icons.more_vert), label: 'More'),
       ],
       onTap: (index) {
-        if (index == 4) {
+        if (index == 2) {
+          viewModel.copySelected();
+        } else if (index == 3) {
+          _showDeleteConfirmationDialog(context, viewModel);
+        } else if (index == 4) {
           _showMoreBottomSheet(context, viewModel);
         }
       },
+    );
+  }
+
+  void _showDeleteConfirmationDialog(
+    BuildContext context,
+    AllFilesViewModel viewModel,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardGrey,
+        title: const Text(
+          'Delete Files?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Text(
+          'Are you sure you want to permanently delete ${viewModel.selectedPaths.length} item(s)? This action cannot be undone.',
+          style: const TextStyle(color: AppTheme.textGrey, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textGrey),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              viewModel.deleteSelectedFiles();
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -433,11 +568,11 @@ class AllFilesView extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                title: const Text(
-                  'Copy',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () => Navigator.pop(context),
+                title: const Text('Cut', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  viewModel.cutSelected();
+                },
               ),
               const Divider(color: Colors.grey, height: 1),
               ListTile(
@@ -445,15 +580,10 @@ class AllFilesView extends StatelessWidget {
                   'Details',
                   style: TextStyle(color: Colors.white),
                 ),
-                onTap: () => Navigator.pop(context),
-              ),
-              const Divider(color: Colors.grey, height: 1),
-              ListTile(
-                title: const Text(
-                  'Compress',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showDetailsDialog(context, viewModel);
+                },
               ),
               const Divider(color: Colors.grey, height: 1),
               ListTile(
@@ -461,20 +591,127 @@ class AllFilesView extends StatelessWidget {
                   'Rename',
                   style: TextStyle(color: Colors.white),
                 ),
-                onTap: () => Navigator.pop(context),
-              ),
-              const Divider(color: Colors.grey, height: 1),
-              ListTile(
-                title: const Text(
-                  'Create Home screen shortcut',
-                  style: TextStyle(color: Colors.white),
-                ),
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showRenameDialog(context, viewModel);
+                },
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  void _showRenameDialog(BuildContext context, AllFilesViewModel viewModel) {
+    if (viewModel.selectedPaths.length != 1) return;
+
+    final currentName = viewModel.selectedPaths.first.split('/').last;
+    final textController = TextEditingController(text: currentName);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardGrey,
+        title: const Text('Rename', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'New name',
+            hintStyle: TextStyle(color: AppTheme.textGrey),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppTheme.textGrey),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: AppTheme.accentBlue),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textGrey),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final newName = textController.text.trim();
+              if (newName.isNotEmpty && newName != currentName) {
+                Navigator.pop(ctx);
+                final error = await viewModel.renameSelected(newName);
+                if (error != null && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(error), backgroundColor: Colors.red),
+                  );
+                }
+              } else {
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text(
+              'Ok',
+              style: TextStyle(color: AppTheme.accentBlue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDetailsDialog(
+    BuildContext context,
+    AllFilesViewModel viewModel,
+  ) async {
+    final details = await viewModel.getDetailsForSelected();
+    if (details == null || !context.mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.cardGrey,
+        title: const Text('Details', style: TextStyle(color: Colors.white)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: details.entries.map((e) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e.key,
+                      style: const TextStyle(
+                        color: AppTheme.textGrey,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      e.value,
+                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Ok',
+              style: TextStyle(color: AppTheme.accentBlue),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -483,7 +720,7 @@ class _FileListItem extends StatelessWidget {
   final FileItemModel item;
   final AllFilesViewModel viewModel;
 
-  const _FileListItem({required this.item, required this.viewModel});
+  const _FileListItem({super.key, required this.item, required this.viewModel});
 
   @override
   Widget build(BuildContext context) {
@@ -498,8 +735,14 @@ class _FileListItem extends StatelessWidget {
       onTap: () {
         if (viewModel.isSelectionMode) {
           viewModel.toggleSelection(item.path);
-        } else {
-          // Navigation into sub-folders later
+        } else if (item.isDirectory) {
+          viewModel.navigateTo(item.path);
+        }
+      },
+      onLongPress: () {
+        if (!viewModel.isSelectionMode) {
+          viewModel.toggleSelectionMode();
+          viewModel.toggleSelection(item.path);
         }
       },
       child: Container(
@@ -575,7 +818,7 @@ class _FileGridItem extends StatelessWidget {
   final FileItemModel item;
   final AllFilesViewModel viewModel;
 
-  const _FileGridItem({required this.item, required this.viewModel});
+  const _FileGridItem({super.key, required this.item, required this.viewModel});
 
   @override
   Widget build(BuildContext context) {
@@ -589,8 +832,14 @@ class _FileGridItem extends StatelessWidget {
       onTap: () {
         if (viewModel.isSelectionMode) {
           viewModel.toggleSelection(item.path);
-        } else {
-          // Navigate inside
+        } else if (item.isDirectory) {
+          viewModel.navigateTo(item.path);
+        }
+      },
+      onLongPress: () {
+        if (!viewModel.isSelectionMode) {
+          viewModel.toggleSelectionMode();
+          viewModel.toggleSelection(item.path);
         }
       },
       child: Container(
@@ -624,24 +873,32 @@ class _FileGridItem extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  countStr,
-                  style: const TextStyle(
-                    color: AppTheme.textGrey,
-                    fontSize: 12,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      countStr,
+                      style: const TextStyle(
+                        color: AppTheme.textGrey,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (viewModel.isSelectionMode) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        isSelected
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank,
+                        color: isSelected
+                            ? AppTheme.accentBlue
+                            : AppTheme.textGrey,
+                        size: 18,
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
-            if (viewModel.isSelectionMode)
-              Positioned(
-                bottom: 8,
-                right: 8,
-                child: Icon(
-                  isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-                  color: isSelected ? AppTheme.accentBlue : AppTheme.textGrey,
-                ),
-              ),
           ],
         ),
       ),
@@ -658,5 +915,66 @@ class _FileGridItem extends StatelessWidget {
     }
 
     return Icon(centerIcon, color: iconColor, size: 56);
+  }
+}
+
+class PasteProgressDialog extends StatelessWidget {
+  final AllFilesViewModel viewModel;
+
+  const PasteProgressDialog({Key? key, required this.viewModel})
+    : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppTheme.cardGrey,
+      title: const Text('Pasting Files', style: TextStyle(color: Colors.white)),
+      content: ListenableBuilder(
+        listenable: viewModel,
+        builder: (context, _) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                viewModel.pasteStatus,
+                style: const TextStyle(color: AppTheme.textGrey, fontSize: 13),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 16),
+              LinearProgressIndicator(
+                value: viewModel.pasteProgress > 0
+                    ? viewModel.pasteProgress
+                    : null,
+                backgroundColor: Colors.black,
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppTheme.accentBlue,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${(viewModel.pasteProgress * 100).toInt()}%',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            viewModel.cancelOngoingPaste();
+          },
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: AppTheme.textGrey),
+          ),
+        ),
+      ],
+    );
   }
 }

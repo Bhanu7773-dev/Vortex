@@ -1,26 +1,37 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:disk_space_2/disk_space_2.dart';
 
 class StorageService {
+  /// Returns true when the app has enough permission to browse/list files.
+  /// On Android 13+: requests READ_MEDIA_* (shows system popup).
+  /// On Android ≤ 12: requests READ_EXTERNAL_STORAGE (shows system popup).
+  /// MANAGE_EXTERNAL_STORAGE is intentionally NOT requested here because
+  /// it always redirects to the Settings page instead of showing a popup.
   Future<bool> requestStoragePermission() async {
-    // Check if we already have modern MANAGE_EXTERNAL_STORAGE (Android 11+)
-    if (await Permission.manageExternalStorage.isGranted) {
+    // Android 13+ (SDK 33) — granular media permissions show a real popup
+    if (await Permission.photos.isGranted ||
+        await Permission.videos.isGranted ||
+        await Permission.audio.isGranted) {
       return true;
     }
 
-    // Check legacy storage
+    // Legacy storage (Android ≤ 12) — single popup
     if (await Permission.storage.isGranted) {
       return true;
     }
 
-    // Request permissions based on availability
-    var manageStatus = await Permission.manageExternalStorage.request();
-    if (manageStatus.isGranted) {
-      return true;
-    }
+    // Determine which permissions to request
+    final statuses = await [
+      Permission.photos, // READ_MEDIA_IMAGES (Android 13+)
+      Permission.videos, // READ_MEDIA_VIDEO  (Android 13+)
+      Permission.audio, // READ_MEDIA_AUDIO  (Android 13+)
+      Permission.storage, // READ_EXTERNAL_STORAGE (≤ Android 12)
+    ].request();
 
-    var storageStatus = await Permission.storage.request();
-    return storageStatus.isGranted;
+    // Granted if ANY media permission was approved
+    return statuses.values.any((s) => s.isGranted);
   }
 
   double _getAdvertisedStorage(double rawGB) {
@@ -43,7 +54,7 @@ class StorageService {
     } catch (e) {
       // Handle missing method channel safely
     }
-    return 64.0; // Fallback placeholder
+    return 64.0;
   }
 
   Future<double> getUsedDiskSpaceGB() async {
@@ -55,13 +66,38 @@ class StorageService {
         final rawTotalGB = totalMb / 1024.0;
         final freeGB = freeMb / 1024.0;
         final advertisedTotal = _getAdvertisedStorage(rawTotalGB);
-        // By subtracting free disk space from the advertised total,
-        // we correctly include OS-reserved system space in the "Used" metric.
         return advertisedTotal - freeGB;
       }
     } catch (e) {
       // Handle missing method channel safely
     }
-    return 56.5; // Fallback placeholder
+    return 56.5;
   }
+}
+
+/// Shows an allow/cancel permission rationale dialog before requesting.
+/// Call this from a UI context (e.g. HomeView) before calling loadStorageData().
+Future<bool> showPermissionRationaleDialog(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Storage Permission Required'),
+      content: const Text(
+        'Vortex needs access to your media files (photos, videos, audio) '
+        'to display your file library. No data is shared externally.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Allow'),
+        ),
+      ],
+    ),
+  );
+  return result ?? false;
 }

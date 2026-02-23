@@ -26,6 +26,25 @@ class RecentView extends StatelessWidget {
         ),
         body: Consumer<RecentViewModel>(
           builder: (context, viewModel, child) {
+            if (viewModel.sections.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.history_toggle_off,
+                      size: 80,
+                      color: AppTheme.textGrey,
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      'No recent files',
+                      style: TextStyle(color: AppTheme.textGrey, fontSize: 16),
+                    ),
+                  ],
+                ),
+              );
+            }
             return CustomScrollView(
               slivers: [
                 SliverToBoxAdapter(
