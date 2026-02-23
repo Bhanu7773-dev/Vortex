@@ -37,10 +37,6 @@ class PhotosView extends StatelessWidget {
               ),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.search, color: Colors.white),
-                  onPressed: () {},
-                ),
-                IconButton(
                   icon: const Icon(Icons.more_vert, color: Colors.white),
                   onPressed: () {},
                 ),

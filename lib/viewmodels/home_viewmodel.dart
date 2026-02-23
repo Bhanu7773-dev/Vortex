@@ -2,17 +2,39 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/category_model.dart';
 import '../services/storage_service.dart';
+import '../services/persistence_service.dart';
+import '../views/all_files_view.dart';
+import '../views/tag_files_view.dart';
 
 class HomeViewModel extends ChangeNotifier {
   final StorageService _storageService = StorageService();
+  final PersistenceService _persistenceService = PersistenceService();
 
   // Storage Stats
   String totalStorage = '...';
   String usedStorage = '...';
   double storagePercentage = 0.0;
   bool isLoadingStats = true;
+  bool isPermissionGranted = false;
 
-  // Categories Grid Data (starts with placeholders, updated after scan)
+  HomeViewModel() {
+    _init();
+  }
+
+  Future<void> _init() async {
+    await checkAndRequestPermissions();
+    _loadPersistentData();
+  }
+
+  Future<void> checkAndRequestPermissions() async {
+    isPermissionGranted = await _storageService.requestStoragePermission();
+    if (isPermissionGranted) {
+      loadStorageData();
+    }
+    notifyListeners();
+  }
+
+  // Categories Grid Data
   List<CategoryModel> categories = [
     CategoryModel(
       name: 'Photos',
@@ -52,8 +74,238 @@ class HomeViewModel extends ChangeNotifier {
     ),
   ];
 
-  HomeViewModel() {
-    loadStorageData();
+  // Sections
+  List<ExpandableSectionModel> sections = [
+    ExpandableSectionModel(
+      title: 'Sources',
+      items: [
+        ExpandableItemModel(
+          title: 'Bluetooth',
+          icon: Icons.bluetooth,
+          iconColor: Colors.blue,
+        ),
+        ExpandableItemModel(
+          title: 'Downloads',
+          icon: Icons.download,
+          iconColor: Colors.green,
+        ),
+      ],
+    ),
+    ExpandableSectionModel(
+      title: 'Quick access',
+      items: [
+        ExpandableItemModel(
+          title: 'Add folder',
+          icon: Icons.add_circle_outline,
+        ),
+      ],
+    ),
+    ExpandableSectionModel(
+      title: 'Tag',
+      items: [
+        ExpandableItemModel(
+          title: 'Important',
+          icon: Icons.bookmark_border,
+          trailingInfo: '0',
+        ),
+        ExpandableItemModel(
+          title: 'Work',
+          icon: Icons.bookmark_border,
+          trailingInfo: '0',
+        ),
+        ExpandableItemModel(
+          title: 'Study',
+          icon: Icons.bookmark_border,
+          trailingInfo: '0',
+        ),
+        ExpandableItemModel(
+          title: 'Life',
+          icon: Icons.bookmark_border,
+          trailingInfo: '0',
+        ),
+        ExpandableItemModel(title: 'Create', icon: Icons.add_circle_outline),
+      ],
+    ),
+  ];
+
+  Future<void> _loadPersistentData() async {
+    final quickPaths = await _persistenceService.loadQuickAccessPaths();
+    final tagMappings = await _persistenceService.loadTagMappings();
+    _updateSections(quickPaths, tagMappings);
+    notifyListeners();
+  }
+
+  void _updateSections(
+    List<String> quickPaths,
+    Map<String, List<String>> tagMappings,
+  ) {
+    sections = [
+      ExpandableSectionModel(
+        title: 'Sources',
+        items: [
+          ExpandableItemModel(
+            title: 'Bluetooth',
+            icon: Icons.bluetooth,
+            iconColor: Colors.blue,
+          ),
+          ExpandableItemModel(
+            title: 'Downloads',
+            icon: Icons.download,
+            iconColor: Colors.green,
+          ),
+        ],
+      ),
+      ExpandableSectionModel(
+        title: 'Quick access',
+        items: [
+          ...quickPaths.map((p) {
+            String name = p.split('/').last;
+            if (p == '/storage/emulated/0') name = 'Internal Storage';
+            return ExpandableItemModel(
+              title: name,
+              icon: Icons.folder,
+              iconColor: Colors.blue,
+            );
+          }),
+          ExpandableItemModel(
+            title: 'Add folder',
+            icon: Icons.add_circle_outline,
+          ),
+        ],
+      ),
+      ExpandableSectionModel(
+        title: 'Tag',
+        items: [
+          ...tagMappings.entries.map(
+            (e) => ExpandableItemModel(
+              title: e.key,
+              icon: Icons.bookmark_border,
+              trailingInfo: e.value.length.toString(),
+            ),
+          ),
+          ExpandableItemModel(title: 'Create', icon: Icons.add_circle_outline),
+        ],
+      ),
+    ];
+  }
+
+  // Navigation helpers
+  void onSectionItemTap(
+    BuildContext context,
+    String sectionTitle,
+    String itemTitle,
+  ) async {
+    if (sectionTitle == 'Sources') {
+      _navigateToSource(context, itemTitle);
+    } else if (itemTitle == 'Add folder') {
+      await _addQuickAccessFolder(context);
+      _loadPersistentData();
+    } else if (sectionTitle == 'Quick access') {
+      _navigateToPath(
+        context,
+        itemTitle,
+      ); // items in this section are folder names
+    } else if (sectionTitle == 'Tag') {
+      if (itemTitle == 'Create') {
+        _createTag(context);
+      } else {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => TagFilesView(tagName: itemTitle)),
+        );
+        _loadPersistentData(); // Refresh counts when returning
+      }
+    }
+  }
+
+  Future<void> _addQuickAccessFolder(BuildContext context) async {
+    final List<String>? selectedPaths = await Navigator.push<List<String>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const AllFilesView(isFolderPickerMode: true),
+      ),
+    );
+
+    if (selectedPaths != null && selectedPaths.isNotEmpty) {
+      final paths = await _persistenceService.loadQuickAccessPaths();
+      for (final p in selectedPaths) {
+        if (!paths.contains(p)) {
+          paths.add(p);
+        }
+      }
+      await _persistenceService.saveQuickAccessPaths(paths);
+      _loadPersistentData(); // Refresh Home screen
+    }
+  }
+
+  Future<void> removeQuickAccessByTitle(String title) async {
+    final paths = await _persistenceService.loadQuickAccessPaths();
+    final path = paths.firstWhere(
+      (p) =>
+          p.split('/').last == title ||
+          (p == '/storage/emulated/0' && title == 'Internal Storage'),
+      orElse: () => '',
+    );
+    if (path.isNotEmpty) {
+      if (paths.remove(path)) {
+        await _persistenceService.saveQuickAccessPaths(paths);
+        _loadPersistentData();
+      }
+    }
+  }
+
+  Future<void> removeQuickAccessFolder(String path) async {
+    final paths = await _persistenceService.loadQuickAccessPaths();
+    if (paths.remove(path)) {
+      await _persistenceService.saveQuickAccessPaths(paths);
+      _loadPersistentData();
+    }
+  }
+
+  Future<void> removeTag(String tagName) async {
+    final mappings = await _persistenceService.loadTagMappings();
+    if (mappings.remove(tagName) != null) {
+      await _persistenceService.saveTagMappings(mappings);
+      _loadPersistentData();
+    }
+  }
+
+  void _navigateToPath(BuildContext context, String title) async {
+    // In Quick Access, title is the folder name. We need to find the path.
+    final paths = await _persistenceService.loadQuickAccessPaths();
+    final path = paths.firstWhere(
+      (p) =>
+          p.split('/').last == title ||
+          (p == '/storage/emulated/0' && title == 'Internal Storage'),
+      orElse: () => '',
+    );
+    if (path.isNotEmpty) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => AllFilesView(initialPath: path)),
+      );
+      _loadPersistentData();
+    }
+  }
+
+  void _navigateToSource(BuildContext context, String title) async {
+    String path = '';
+    if (title == 'Bluetooth')
+      path = '/storage/emulated/0/Bluetooth';
+    else if (title == 'Downloads')
+      path = '/storage/emulated/0/Download';
+
+    if (path.isNotEmpty && Directory(path).existsSync()) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => AllFilesView(initialPath: path)),
+      );
+      _loadPersistentData();
+    } else if (path.isNotEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$title folder not found')));
+    }
   }
 
   static const _photoExts = {
@@ -233,57 +485,37 @@ class HomeViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Expandable Sections Data
-  final List<ExpandableSectionModel> sections = [
-    ExpandableSectionModel(
-      title: 'Sources',
-      items: [
-        ExpandableItemModel(
-          title: 'Bluetooth',
-          icon: Icons.bluetooth,
-          iconColor: Colors.blue,
+  Future<void> _createTag(BuildContext context) async {
+    final TextEditingController ctrl = TextEditingController();
+    final String? tagName = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New Tag'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Enter tag name'),
         ),
-        ExpandableItemModel(
-          title: 'Downloads',
-          icon: Icons.download,
-          iconColor: Colors.green,
-        ),
-      ],
-    ),
-    ExpandableSectionModel(
-      title: 'Quick access',
-      items: [
-        ExpandableItemModel(
-          title: 'Add folder',
-          icon: Icons.add_circle_outline,
-        ),
-      ],
-    ),
-    ExpandableSectionModel(
-      title: 'Tag',
-      items: [
-        ExpandableItemModel(
-          title: 'Important',
-          icon: Icons.bookmark_border,
-          trailingInfo: '0',
-        ),
-        ExpandableItemModel(
-          title: 'Work',
-          icon: Icons.bookmark_border,
-          trailingInfo: '0',
-        ),
-        ExpandableItemModel(
-          title: 'Study',
-          icon: Icons.bookmark_border,
-          trailingInfo: '0',
-        ),
-        ExpandableItemModel(
-          title: 'Life',
-          icon: Icons.bookmark_border,
-          trailingInfo: '0',
-        ),
-        ExpandableItemModel(title: 'Create', icon: Icons.add_circle_outline),
-      ],
-    ),
-  ];
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    if (tagName != null && tagName.isNotEmpty) {
+      final mappings = await _persistenceService.loadTagMappings();
+      if (!mappings.containsKey(tagName)) {
+        mappings[tagName] = [];
+        await _persistenceService.saveTagMappings(mappings);
+        _loadPersistentData();
+      }
+    }
+  }
 }

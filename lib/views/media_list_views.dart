@@ -1,15 +1,21 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/media_viewmodels.dart';
 import '../theme/app_theme.dart';
+import '../utils/file_opener.dart';
 
 // ══════════════════════════════════════════════
 //  AUDIO VIEW
 // ══════════════════════════════════════════════
-class AudioView extends StatelessWidget {
+class AudioView extends StatefulWidget {
   const AudioView({Key? key}) : super(key: key);
+  @override
+  State<AudioView> createState() => _AudioViewState();
+}
 
+class _AudioViewState extends State<AudioView> {
   static const _exts = {
     'mp3',
     'wav',
@@ -21,6 +27,16 @@ class AudioView extends StatelessWidget {
     'opus',
   };
   static const _filters = ['All', 'MP3', 'OPUS', 'WAV', 'M4A', 'FLAC', 'AAC'];
+  final _searchFocus = FocusNode();
+  bool _searching = false;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,30 +45,7 @@ class AudioView extends StatelessWidget {
       child: Consumer<MediaListViewModel>(
         builder: (context, vm, _) => Scaffold(
           backgroundColor: AppTheme.backgroundBlack,
-          appBar: vm.isSelectionMode
-              ? _buildSelectionBar(context, vm)
-              : AppBar(
-                  backgroundColor: AppTheme.backgroundBlack,
-                  elevation: 0,
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  title: const Text(
-                    'Audio',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.search, color: Colors.white),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
+          appBar: _buildAppBar(context, vm),
           body: vm.isLoading
               ? const Center(
                   child: CircularProgressIndicator(color: AppTheme.accentBlue),
@@ -72,7 +65,9 @@ class AudioView extends StatelessWidget {
                         ? Expanded(
                             child: _EmptyState(
                               icon: Icons.music_off,
-                              label: 'No audio files',
+                              label: _searching && _searchCtrl.text.isNotEmpty
+                                  ? 'No results for "${_searchCtrl.text}"'
+                                  : 'No audio files',
                             ),
                           )
                         : Expanded(
@@ -81,8 +76,11 @@ class AudioView extends StatelessWidget {
                               selectedPaths: vm.selectedPaths,
                               isSelectionMode: vm.isSelectionMode,
                               onTap: (path) {
-                                if (vm.isSelectionMode)
+                                if (vm.isSelectionMode) {
                                   vm.toggleSelection(path);
+                                } else {
+                                  FileOpener.openFile(context, path);
+                                }
                               },
                               onLongPress: (path) {
                                 HapticFeedback.mediumImpact();
@@ -116,8 +114,12 @@ class AudioView extends StatelessWidget {
     );
   }
 
-  AppBar _buildSelectionBar(BuildContext context, MediaListViewModel vm) =>
-      AppBar(
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    MediaListViewModel vm,
+  ) {
+    if (vm.isSelectionMode) {
+      return AppBar(
         backgroundColor: AppTheme.cardGrey,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
@@ -143,14 +145,81 @@ class AudioView extends StatelessWidget {
           ),
         ],
       );
+    }
+    if (_searching) {
+      return AppBar(
+        backgroundColor: AppTheme.backgroundBlack,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            setState(() => _searching = false);
+            _searchCtrl.clear();
+            vm.applySearch('');
+          },
+        ),
+        title: TextField(
+          controller: _searchCtrl,
+          focusNode: _searchFocus,
+          autofocus: true,
+          cursorColor: Colors.white,
+          cursorWidth: 2,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+          decoration: const InputDecoration(
+            hintText: 'Search audio…',
+            hintStyle: TextStyle(color: Colors.white38),
+            border: InputBorder.none,
+          ),
+          onChanged: vm.applySearch,
+        ),
+        actions: [
+          if (_searchCtrl.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              onPressed: () {
+                _searchCtrl.clear();
+                vm.applySearch('');
+                setState(() {});
+              },
+            ),
+        ],
+      );
+    }
+    return AppBar(
+      backgroundColor: AppTheme.backgroundBlack,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Text(
+        'Audio',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.search, color: Colors.white),
+          onPressed: () => setState(() => _searching = true),
+        ),
+      ],
+    );
+  }
 }
 
 // ══════════════════════════════════════════════
 //  ARCHIVES VIEW
 // ══════════════════════════════════════════════
-class ArchivesView extends StatelessWidget {
+class ArchivesView extends StatefulWidget {
   const ArchivesView({Key? key}) : super(key: key);
+  @override
+  State<ArchivesView> createState() => _ArchivesViewState();
+}
 
+class _ArchivesViewState extends State<ArchivesView> {
   static const _exts = {
     'zip',
     'rar',
@@ -163,7 +232,6 @@ class ArchivesView extends StatelessWidget {
     'iso',
   };
   static const _filters = ['All', 'ZIP', 'RAR', '7Z', 'TAR', 'JAR'];
-
   static const Map<String, Color> _colors = {
     'zip': Color(0xFFD4A046),
     '7z': Color(0xFF6B8CFF),
@@ -172,6 +240,16 @@ class ArchivesView extends StatelessWidget {
     'gz': Color(0xFFE87040),
     'jar': Color(0xFF4CAF50),
   };
+  final _searchFocus = FocusNode();
+  bool _searching = false;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,30 +258,7 @@ class ArchivesView extends StatelessWidget {
       child: Consumer<MediaListViewModel>(
         builder: (context, vm, _) => Scaffold(
           backgroundColor: AppTheme.backgroundBlack,
-          appBar: vm.isSelectionMode
-              ? _buildSelectionBar(context, vm)
-              : AppBar(
-                  backgroundColor: AppTheme.backgroundBlack,
-                  elevation: 0,
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  title: const Text(
-                    'Archives',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.search, color: Colors.white),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
+          appBar: _buildAppBar(context, vm),
           body: vm.isLoading
               ? const Center(
                   child: CircularProgressIndicator(color: AppTheme.accentBlue),
@@ -223,7 +278,9 @@ class ArchivesView extends StatelessWidget {
                         ? Expanded(
                             child: _EmptyState(
                               icon: Icons.inventory_2_outlined,
-                              label: 'No archives found',
+                              label: _searching && _searchCtrl.text.isNotEmpty
+                                  ? 'No results for "${_searchCtrl.text}"'
+                                  : 'No archives found',
                             ),
                           )
                         : Expanded(
@@ -232,8 +289,11 @@ class ArchivesView extends StatelessWidget {
                               selectedPaths: vm.selectedPaths,
                               isSelectionMode: vm.isSelectionMode,
                               onTap: (path) {
-                                if (vm.isSelectionMode)
+                                if (vm.isSelectionMode) {
                                   vm.toggleSelection(path);
+                                } else {
+                                  FileOpener.openFile(context, path);
+                                }
                               },
                               onLongPress: (path) {
                                 HapticFeedback.mediumImpact();
@@ -268,8 +328,12 @@ class ArchivesView extends StatelessWidget {
     );
   }
 
-  AppBar _buildSelectionBar(BuildContext context, MediaListViewModel vm) =>
-      AppBar(
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    MediaListViewModel vm,
+  ) {
+    if (vm.isSelectionMode) {
+      return AppBar(
         backgroundColor: AppTheme.cardGrey,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
@@ -295,14 +359,92 @@ class ArchivesView extends StatelessWidget {
           ),
         ],
       );
+    }
+    if (_searching) {
+      return AppBar(
+        backgroundColor: AppTheme.backgroundBlack,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            setState(() => _searching = false);
+            _searchCtrl.clear();
+            vm.applySearch('');
+          },
+        ),
+        title: TextField(
+          controller: _searchCtrl,
+          focusNode: _searchFocus,
+          autofocus: true,
+          cursorColor: Colors.white,
+          cursorWidth: 2,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+          decoration: const InputDecoration(
+            hintText: 'Search archives…',
+            hintStyle: TextStyle(color: Colors.white38),
+            border: InputBorder.none,
+          ),
+          onChanged: vm.applySearch,
+        ),
+        actions: [
+          if (_searchCtrl.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              onPressed: () {
+                _searchCtrl.clear();
+                vm.applySearch('');
+                setState(() {});
+              },
+            ),
+        ],
+      );
+    }
+    return AppBar(
+      backgroundColor: AppTheme.backgroundBlack,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Text(
+        'Archives',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.search, color: Colors.white),
+          onPressed: () => setState(() => _searching = true),
+        ),
+      ],
+    );
+  }
 }
 
 // ══════════════════════════════════════════════
 //  APKs VIEW
 // ══════════════════════════════════════════════
-class ApksView extends StatelessWidget {
+class ApksView extends StatefulWidget {
   const ApksView({Key? key}) : super(key: key);
+  @override
+  State<ApksView> createState() => _ApksViewState();
+}
+
+class _ApksViewState extends State<ApksView> {
   static const _exts = {'apk', 'aab', 'xapk'};
+  final _searchFocus = FocusNode();
+  bool _searching = false;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -311,30 +453,7 @@ class ApksView extends StatelessWidget {
       child: Consumer<MediaListViewModel>(
         builder: (context, vm, _) => Scaffold(
           backgroundColor: AppTheme.backgroundBlack,
-          appBar: vm.isSelectionMode
-              ? _buildSelectionBar(context, vm)
-              : AppBar(
-                  backgroundColor: AppTheme.backgroundBlack,
-                  elevation: 0,
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  title: const Text(
-                    'APKs',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.search, color: Colors.white),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
+          appBar: _buildAppBar(context, vm),
           body: vm.isLoading
               ? const Center(
                   child: CircularProgressIndicator(color: AppTheme.accentBlue),
@@ -349,7 +468,9 @@ class ApksView extends StatelessWidget {
                         ? Expanded(
                             child: _EmptyState(
                               icon: Icons.android,
-                              label: 'No APK files',
+                              label: _searching && _searchCtrl.text.isNotEmpty
+                                  ? 'No results for "${_searchCtrl.text}"'
+                                  : 'No APK files',
                             ),
                           )
                         : Expanded(
@@ -358,8 +479,11 @@ class ApksView extends StatelessWidget {
                               selectedPaths: vm.selectedPaths,
                               isSelectionMode: vm.isSelectionMode,
                               onTap: (path) {
-                                if (vm.isSelectionMode)
+                                if (vm.isSelectionMode) {
                                   vm.toggleSelection(path);
+                                } else {
+                                  FileOpener.openFile(context, path);
+                                }
                               },
                               onLongPress: (path) {
                                 HapticFeedback.mediumImpact();
@@ -419,8 +543,12 @@ class ApksView extends StatelessWidget {
     );
   }
 
-  AppBar _buildSelectionBar(BuildContext context, MediaListViewModel vm) =>
-      AppBar(
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    MediaListViewModel vm,
+  ) {
+    if (vm.isSelectionMode) {
+      return AppBar(
         backgroundColor: AppTheme.cardGrey,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
@@ -446,14 +574,81 @@ class ApksView extends StatelessWidget {
           ),
         ],
       );
+    }
+    if (_searching) {
+      return AppBar(
+        backgroundColor: AppTheme.backgroundBlack,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            setState(() => _searching = false);
+            _searchCtrl.clear();
+            vm.applySearch('');
+          },
+        ),
+        title: TextField(
+          controller: _searchCtrl,
+          focusNode: _searchFocus,
+          autofocus: true,
+          cursorColor: Colors.white,
+          cursorWidth: 2,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+          decoration: const InputDecoration(
+            hintText: 'Search APKs…',
+            hintStyle: TextStyle(color: Colors.white38),
+            border: InputBorder.none,
+          ),
+          onChanged: vm.applySearch,
+        ),
+        actions: [
+          if (_searchCtrl.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              onPressed: () {
+                _searchCtrl.clear();
+                vm.applySearch('');
+                setState(() {});
+              },
+            ),
+        ],
+      );
+    }
+    return AppBar(
+      backgroundColor: AppTheme.backgroundBlack,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Text(
+        'APKs',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.search, color: Colors.white),
+          onPressed: () => setState(() => _searching = true),
+        ),
+      ],
+    );
+  }
 }
 
 // ══════════════════════════════════════════════
 //  DOCUMENTS VIEW
 // ══════════════════════════════════════════════
-class DocumentsView extends StatelessWidget {
+class DocumentsView extends StatefulWidget {
   const DocumentsView({Key? key}) : super(key: key);
+  @override
+  State<DocumentsView> createState() => _DocumentsViewState();
+}
 
+class _DocumentsViewState extends State<DocumentsView> {
   static const _exts = {
     'pdf',
     'doc',
@@ -468,7 +663,6 @@ class DocumentsView extends StatelessWidget {
     'csv',
   };
   static const _filters = ['All', 'PDF', 'DOC', 'XLS', 'PPT', 'TXT'];
-
   static const Map<String, Color> _colors = {
     'pdf': Colors.red,
     'doc': Color(0xFF2B5EBE),
@@ -480,7 +674,6 @@ class DocumentsView extends StatelessWidget {
     'txt': Colors.blueGrey,
     'csv': Color(0xFF1E7145),
   };
-
   static const Map<String, IconData> _icons = {
     'pdf': Icons.picture_as_pdf,
     'xls': Icons.table_chart,
@@ -488,7 +681,6 @@ class DocumentsView extends StatelessWidget {
     'ppt': Icons.slideshow,
     'pptx': Icons.slideshow,
   };
-
   static const Map<String, String> _filterMap = {
     'PDF': 'pdf',
     'DOC': 'docx',
@@ -496,6 +688,16 @@ class DocumentsView extends StatelessWidget {
     'PPT': 'pptx',
     'TXT': 'txt',
   };
+  final _searchFocus = FocusNode();
+  bool _searching = false;
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -504,30 +706,7 @@ class DocumentsView extends StatelessWidget {
       child: Consumer<MediaListViewModel>(
         builder: (context, vm, _) => Scaffold(
           backgroundColor: AppTheme.backgroundBlack,
-          appBar: vm.isSelectionMode
-              ? _buildSelectionBar(context, vm)
-              : AppBar(
-                  backgroundColor: AppTheme.backgroundBlack,
-                  elevation: 0,
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  title: const Text(
-                    'Documents',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.search, color: Colors.white),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
+          appBar: _buildAppBar(context, vm),
           body: vm.isLoading
               ? const Center(
                   child: CircularProgressIndicator(color: AppTheme.accentBlue),
@@ -549,7 +728,9 @@ class DocumentsView extends StatelessWidget {
                         ? Expanded(
                             child: _EmptyState(
                               icon: Icons.folder_open_outlined,
-                              label: 'No documents found',
+                              label: _searching && _searchCtrl.text.isNotEmpty
+                                  ? 'No results for "${_searchCtrl.text}"'
+                                  : 'No documents found',
                             ),
                           )
                         : Expanded(
@@ -558,8 +739,11 @@ class DocumentsView extends StatelessWidget {
                               selectedPaths: vm.selectedPaths,
                               isSelectionMode: vm.isSelectionMode,
                               onTap: (path) {
-                                if (vm.isSelectionMode)
+                                if (vm.isSelectionMode) {
                                   vm.toggleSelection(path);
+                                } else {
+                                  FileOpener.openFile(context, path);
+                                }
                               },
                               onLongPress: (path) {
                                 HapticFeedback.mediumImpact();
@@ -572,12 +756,12 @@ class DocumentsView extends StatelessWidget {
                               iconBuilder: (item) {
                                 final c =
                                     _colors[item.ext] ?? AppTheme.textGrey;
-                                final icon =
-                                    _icons[item.ext] ?? Icons.insert_drive_file;
                                 return _Icon(
                                   color: c,
                                   bg: c.withOpacity(0.12),
-                                  icon: icon,
+                                  icon:
+                                      _icons[item.ext] ??
+                                      Icons.insert_drive_file,
                                 );
                               },
                             ),
@@ -600,8 +784,12 @@ class DocumentsView extends StatelessWidget {
     );
   }
 
-  AppBar _buildSelectionBar(BuildContext context, MediaListViewModel vm) =>
-      AppBar(
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    MediaListViewModel vm,
+  ) {
+    if (vm.isSelectionMode) {
+      return AppBar(
         backgroundColor: AppTheme.cardGrey,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
@@ -627,6 +815,69 @@ class DocumentsView extends StatelessWidget {
           ),
         ],
       );
+    }
+    if (_searching) {
+      return AppBar(
+        backgroundColor: AppTheme.backgroundBlack,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            setState(() => _searching = false);
+            _searchCtrl.clear();
+            vm.applySearch('');
+          },
+        ),
+        title: TextField(
+          controller: _searchCtrl,
+          focusNode: _searchFocus,
+          autofocus: true,
+          cursorColor: Colors.white,
+          cursorWidth: 2,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+          decoration: const InputDecoration(
+            hintText: 'Search documents…',
+            hintStyle: TextStyle(color: Colors.white38),
+            border: InputBorder.none,
+          ),
+          onChanged: vm.applySearch,
+        ),
+        actions: [
+          if (_searchCtrl.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+              onPressed: () {
+                _searchCtrl.clear();
+                vm.applySearch('');
+                setState(() {});
+              },
+            ),
+        ],
+      );
+    }
+    return AppBar(
+      backgroundColor: AppTheme.backgroundBlack,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Text(
+        'Documents',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.search, color: Colors.white),
+          onPressed: () => setState(() => _searching = true),
+        ),
+      ],
+    );
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -760,6 +1011,7 @@ class _EmptyState extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(color: AppTheme.textGrey, fontSize: 16),
+          textAlign: TextAlign.center,
         ),
       ],
     ),
@@ -908,39 +1160,37 @@ class _BottomActionBar extends StatelessWidget {
   const _BottomActionBar({required this.onShare, required this.onDelete});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 64 + MediaQuery.of(context).padding.bottom,
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-      decoration: const BoxDecoration(
-        color: AppTheme.cardGrey,
-        border: Border(top: BorderSide(color: Colors.white10)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _ActionBtn(icon: Icons.share_rounded, label: 'Share', onTap: onShare),
-          Container(width: 1, height: 36, color: Colors.white12),
-          _ActionBtn(
-            icon: Icons.delete_outline_rounded,
-            label: 'Delete',
-            color: Colors.redAccent,
-            onTap: onDelete ?? () {},
-            enabled: onDelete != null,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    height: 64 + MediaQuery.of(context).padding.bottom,
+    padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
+    decoration: const BoxDecoration(
+      color: AppTheme.cardGrey,
+      border: Border(top: BorderSide(color: Colors.white10)),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _Btn(icon: Icons.share_rounded, label: 'Share', onTap: onShare),
+        Container(width: 1, height: 36, color: Colors.white12),
+        _Btn(
+          icon: Icons.delete_outline_rounded,
+          label: 'Delete',
+          color: Colors.redAccent,
+          onTap: onDelete ?? () {},
+          enabled: onDelete != null,
+        ),
+      ],
+    ),
+  );
 }
 
-class _ActionBtn extends StatelessWidget {
+class _Btn extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final Color color;
   final bool enabled;
-  const _ActionBtn({
+  const _Btn({
     required this.icon,
     required this.label,
     required this.onTap,

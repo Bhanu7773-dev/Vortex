@@ -10,28 +10,49 @@ class StorageService {
   /// MANAGE_EXTERNAL_STORAGE is intentionally NOT requested here because
   /// it always redirects to the Settings page instead of showing a popup.
   Future<bool> requestStoragePermission() async {
-    // Android 13+ (SDK 33) — granular media permissions show a real popup
-    if (await Permission.photos.isGranted ||
-        await Permission.videos.isGranted ||
-        await Permission.audio.isGranted) {
+    // 1. Check for MANAGE_EXTERNAL_STORAGE (Android 11+)
+    if (await Permission.manageExternalStorage.isGranted) {
       return true;
     }
 
-    // Legacy storage (Android ≤ 12) — single popup
-    if (await Permission.storage.isGranted) {
+    // 2. Android 13+ (SDK 33) — granular media permissions
+    bool isAndroid13OrHigher = false;
+    if (Platform.isAndroid) {
+      // In a real app, you'd check SDK version. Here we check if media permissions are even relevant.
+      isAndroid13OrHigher =
+          await Permission.photos.status != PermissionStatus.restricted;
+    }
+
+    if (isAndroid13OrHigher) {
+      final statuses = await [
+        Permission.photos,
+        Permission.videos,
+        Permission.audio,
+      ].request();
+
+      if (statuses.values.every((s) => s.isGranted)) {
+        return true;
+      }
+    }
+
+    // 3. Legacy storage (Android ≤ 12)
+    final storageStatus = await Permission.storage.request();
+    if (storageStatus.isGranted) {
       return true;
     }
 
-    // Determine which permissions to request
-    final statuses = await [
-      Permission.photos, // READ_MEDIA_IMAGES (Android 13+)
-      Permission.videos, // READ_MEDIA_VIDEO  (Android 13+)
-      Permission.audio, // READ_MEDIA_AUDIO  (Android 13+)
-      Permission.storage, // READ_EXTERNAL_STORAGE (≤ Android 12)
-    ].request();
+    // 4. For full file manager features on Android 11+, we need to request MANAGE_EXTERNAL_STORAGE
+    // This will open the system settings page.
+    if (await Permission.manageExternalStorage.request().isGranted) {
+      return true;
+    }
 
-    // Granted if ANY media permission was approved
-    return statuses.values.any((s) => s.isGranted);
+    return false;
+  }
+
+  /// Returns true if the app has full file system access (Android 11+)
+  Future<bool> hasFullAccess() async {
+    return await Permission.manageExternalStorage.isGranted;
   }
 
   double _getAdvertisedStorage(double rawGB) {

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import '../viewmodels/media_viewmodels.dart';
 import '../theme/app_theme.dart';
+import '../utils/file_opener.dart';
 
 // ─── Shared thumbnail widget for a video file ──
 class _VideoThumb extends StatefulWidget {
@@ -116,12 +117,7 @@ class VideosView extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.search, color: Colors.white),
-                onPressed: () {},
-              ),
-            ],
+            actions: [],
           ),
           body: vm.isLoading
               ? const Center(
@@ -272,8 +268,11 @@ class VideoAlbumDetailView extends StatelessWidget {
                         final sel = vm.selectedPaths.contains(file.path);
                         return GestureDetector(
                           onTap: () {
-                            if (vm.isSelectionMode)
+                            if (vm.isSelectionMode) {
                               vm.toggleSelection(file.path);
+                            } else {
+                              FileOpener.openFile(context, file.path);
+                            }
                           },
                           onLongPress: () {
                             HapticFeedback.mediumImpact();

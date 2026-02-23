@@ -240,11 +240,27 @@ class MediaListViewModel extends ChangeNotifier {
     } catch (_) {}
   }
 
+  String searchQuery = '';
+
   void applyFilter(String filter) {
     activeFilter = filter;
-    filteredItems = filter == 'All'
+    _refilter();
+  }
+
+  void applySearch(String query) {
+    searchQuery = query;
+    _refilter();
+  }
+
+  void _refilter() {
+    var base = activeFilter == 'All'
         ? _allItems
-        : _allItems.where((f) => f.ext == filter.toLowerCase()).toList();
+        : _allItems.where((f) => f.ext == activeFilter.toLowerCase()).toList();
+    if (searchQuery.isNotEmpty) {
+      final q = searchQuery.toLowerCase();
+      base = base.where((f) => f.name.toLowerCase().contains(q)).toList();
+    }
+    filteredItems = base;
     notifyListeners();
   }
 

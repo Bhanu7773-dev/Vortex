@@ -40,6 +40,12 @@ dependencies:
   disk_space_2: ^1.0.12
   intl: ^0.20.2
   video_thumbnail: ^0.5.3
+  shared_preferences: ^2.5.2
+  path_provider: ^2.1.5
+  video_player: ^2.9.2
+  chewie: ^1.9.0
+  audioplayers: ^6.1.1
+  open_filex: ^4.5.1
 
 dev_dependencies:
   flutter_test:

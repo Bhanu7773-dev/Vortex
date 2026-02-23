@@ -4,7 +4,6 @@ import '../viewmodels/home_viewmodel.dart';
 import '../widgets/storage_card.dart';
 import '../widgets/category_grid.dart';
 import '../widgets/expandable_list.dart';
-import '../theme/app_theme.dart';
 
 class HomeView extends StatelessWidget {
   const HomeView({Key? key}) : super(key: key);
@@ -41,45 +40,6 @@ class HomeView extends StatelessWidget {
                       section: viewModel.sections[index],
                     );
                   }, childCount: viewModel.sections.length),
-                ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Card(
-                      margin: EdgeInsets.zero,
-                      child: ListTile(
-                        leading: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.white,
-                          size: 28,
-                        ),
-                        title: const Text(
-                          'Recently deleted',
-                          style: TextStyle(color: Colors.white, fontSize: 16),
-                        ),
-                        subtitle: const Text(
-                          '27 items | 204 MB',
-                          style: TextStyle(
-                            color: AppTheme.textGrey,
-                            fontSize: 14,
-                          ),
-                        ),
-                        trailing: Container(
-                          decoration: const BoxDecoration(
-                            color: AppTheme.accentBlue,
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.cleaning_services,
-                              color: Colors.white,
-                            ),
-                            onPressed: () {},
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                 ),
                 // Padding for FAB area
                 const SliverToBoxAdapter(child: SizedBox(height: 80)),

@@ -4,16 +4,34 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/file_item_model.dart';
+import '../services/persistence_service.dart';
 
 enum SortOption { dateModified, size, filename, type }
 
 class AllFilesViewModel extends ChangeNotifier {
-  String currentPath = '/storage/emulated/0';
+  String currentPath;
   final String rootPath = '/storage/emulated/0';
   List<String> pathHistory = [];
+  bool isFolderPickerMode;
+  final PersistenceService _persistenceService = PersistenceService();
+
+  AllFilesViewModel({String? initialPath, this.isFolderPickerMode = false})
+    : currentPath = initialPath ?? '/storage/emulated/0' {
+    _loadDirectory();
+  }
+
+  Future<void> tagSelectedItems(String tagName) async {
+    for (final path in selectedPaths) {
+      await _persistenceService.addPathToTag(tagName, path);
+    }
+    // Clear selected paths and exit selection mode after tagging
+    selectedPaths.clear();
+    isSelectionMode = false;
+    notifyListeners();
+  }
 
   String get currentFolderName {
-    if (currentPath == rootPath) return 'All files';
+    if (currentPath == rootPath) return 'Internal Storage';
     return currentPath.split('/').last;
   }
 
@@ -62,6 +80,13 @@ class AllFilesViewModel extends ChangeNotifier {
   int _totalItemsToPaste = 0;
   int _itemsPasted = 0;
 
+  // Search State
+  bool isSearchMode = false;
+  String searchQuery = '';
+  List<FileItemModel> searchResults = [];
+  bool isSearchLoading = false;
+  bool _searchCancelled = false;
+
   String get itemCountString {
     if (items.isEmpty) return '0 items in total';
 
@@ -75,8 +100,90 @@ class AllFilesViewModel extends ChangeNotifier {
     return '${items.length} items in total';
   }
 
-  AllFilesViewModel() {
-    _loadDirectory();
+  /// Deep-search recursively from [currentPath], filtering by [query].
+  /// Each matching file/folder is appended to [searchResults] live.
+  Future<void> deepSearch(String query) async {
+    _searchCancelled = true; // Cancel any previous search run
+    await Future.delayed(
+      const Duration(milliseconds: 50),
+    ); // Let previous loop cancel
+    _searchCancelled = false;
+
+    searchQuery = query;
+    searchResults = [];
+    isSearchLoading = true;
+    isSearchMode = true;
+    notifyListeners();
+
+    if (query.trim().isEmpty) {
+      isSearchLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    final q = query.toLowerCase();
+    await _deepScanForSearch(Directory(currentPath), q);
+
+    if (!_searchCancelled) {
+      isSearchLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _deepScanForSearch(Directory dir, String q) async {
+    if (_searchCancelled) return;
+    try {
+      // Use async list() to avoid blocking the UI thread
+      final entities = await dir
+          .list(recursive: false, followLinks: false)
+          .toList();
+      for (final entity in entities) {
+        if (_searchCancelled) return;
+        final name = entity.path.split('/').last;
+        if (name.startsWith('.')) continue;
+        if (name.toLowerCase().contains(q)) {
+          final isDir = entity is Directory;
+          int count = 0;
+          DateTime modified = DateTime.now();
+          try {
+            final stat = await entity.stat(); // async stat
+            modified = stat.modified;
+          } catch (_) {}
+          if (isDir) {
+            try {
+              count = (await entity.list(recursive: false).length);
+            } catch (_) {}
+          }
+          searchResults = List.from(searchResults)
+            ..add(
+              FileItemModel(
+                name: name,
+                path: entity.path,
+                isDirectory: isDir,
+                itemCount: count,
+                modifiedDate: modified,
+                categoryHint: isDir ? '' : _inferCategory(name),
+              ),
+            );
+          // Batch: notify every 15 results, not per-match
+          if (searchResults.length % 15 == 0) notifyListeners();
+        }
+        if (entity is Directory && entity.path.split('/').last != 'Android') {
+          await _deepScanForSearch(entity, q);
+        }
+        // Yield to event loop periodically to keep UI responsive
+        await Future.delayed(Duration.zero);
+      }
+    } catch (_) {}
+  }
+
+  void clearSearch() {
+    _searchCancelled = true;
+    isSearchMode = false;
+    searchQuery = '';
+    searchResults = [];
+    isSearchLoading = false;
+    notifyListeners();
   }
 
   Future<void> _loadDirectory() async {

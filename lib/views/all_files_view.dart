@@ -1,17 +1,46 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:vortex/viewmodels/all_files_viewmodel.dart';
 import 'package:vortex/models/file_item_model.dart';
 import 'package:vortex/theme/app_theme.dart';
+import 'package:vortex/widgets/tag_selection_sheet.dart';
+import 'package:vortex/utils/file_opener.dart';
 
-class AllFilesView extends StatelessWidget {
-  const AllFilesView({Key? key}) : super(key: key);
+class AllFilesView extends StatefulWidget {
+  final String? initialPath;
+  final bool isFolderPickerMode;
+  const AllFilesView({
+    Key? key,
+    this.initialPath,
+    this.isFolderPickerMode = false,
+  }) : super(key: key);
+  @override
+  State<AllFilesView> createState() => _AllFilesViewState();
+}
+
+class _AllFilesViewState extends State<AllFilesView> {
+  final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
+  bool _searching = false;
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<AllFilesViewModel>(
-      create: (_) => AllFilesViewModel(),
+      create: (_) => AllFilesViewModel(
+        initialPath: widget.initialPath,
+        isFolderPickerMode: widget.isFolderPickerMode,
+      ),
       child: Consumer<AllFilesViewModel>(
         builder: (context, viewModel, child) {
           return PopScope(
@@ -22,6 +51,28 @@ class AllFilesView extends StatelessWidget {
               }
             },
             child: Scaffold(
+              floatingActionButton: viewModel.isFolderPickerMode
+                  ? FloatingActionButton.extended(
+                      onPressed: () {
+                        // Return list of selected paths, or current path if none selected
+                        if (viewModel.selectedPaths.isEmpty) {
+                          Navigator.pop(context, [viewModel.currentPath]);
+                        } else {
+                          Navigator.pop(
+                            context,
+                            viewModel.selectedPaths.toList(),
+                          );
+                        }
+                      },
+                      label: Text(
+                        viewModel.selectedPaths.isEmpty
+                            ? 'Add this folder'
+                            : 'Add ${viewModel.selectedPaths.length} folders',
+                      ),
+                      icon: const Icon(Icons.check),
+                      backgroundColor: AppTheme.accentBlue,
+                    )
+                  : null,
               appBar: PreferredSize(
                 preferredSize: const Size.fromHeight(kToolbarHeight),
                 child: viewModel.isSelectionMode
@@ -54,6 +105,59 @@ class AllFilesView extends StatelessWidget {
                           ),
                         ],
                       )
+                    : _searching
+                    ? AppBar(
+                        leading: IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () {
+                            setState(() => _searching = false);
+                            _searchCtrl.clear();
+                            viewModel.clearSearch();
+                          },
+                        ),
+                        title: TextField(
+                          controller: _searchCtrl,
+                          focusNode: _searchFocus,
+                          autofocus: true,
+                          cursorColor: Colors.white,
+                          cursorWidth: 2,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
+                          decoration: InputDecoration(
+                            hintText:
+                                'Search in ${viewModel.currentFolderName}…',
+                            hintStyle: const TextStyle(color: Colors.white38),
+                            border: InputBorder.none,
+                          ),
+                          onChanged: (q) {
+                            _debounce?.cancel();
+                            _debounce = Timer(
+                              const Duration(milliseconds: 350),
+                              () {
+                                viewModel.deepSearch(q);
+                              },
+                            );
+                            setState(() {}); // rebuild X button instantly
+                          },
+                        ),
+                        actions: [
+                          if (_searchCtrl.text.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close,
+                                size: 20,
+                                color: Colors.white54,
+                              ),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                viewModel.deepSearch('');
+                                setState(() {});
+                              },
+                            ),
+                        ],
+                      )
                     : AppBar(
                         title: Text(viewModel.currentFolderName),
                         actions: [
@@ -77,16 +181,15 @@ class AllFilesView extends StatelessWidget {
                               ),
                             ],
                             onSelected: (value) {
-                              if (value == 'new_folder') {
+                              if (value == 'new_folder')
                                 _showCreateDialog(context, viewModel, true);
-                              } else if (value == 'add_files') {
+                              else if (value == 'add_files')
                                 _showCreateDialog(context, viewModel, false);
-                              }
                             },
                           ),
                           IconButton(
                             icon: const Icon(Icons.search),
-                            onPressed: () {},
+                            onPressed: () => setState(() => _searching = true),
                           ),
                           PopupMenuButton<String>(
                             icon: const Icon(Icons.more_vert),
@@ -117,11 +220,10 @@ class AllFilesView extends StatelessWidget {
                               ),
                             ],
                             onSelected: (value) {
-                              if (value == 'grid_view') {
+                              if (value == 'grid_view')
                                 viewModel.toggleGridView();
-                              } else if (value == 'edit') {
+                              else if (value == 'edit')
                                 viewModel.toggleSelectionMode();
-                              }
                             },
                           ),
                         ],
@@ -134,6 +236,82 @@ class AllFilesView extends StatelessWidget {
                   : null,
               body: Builder(
                 builder: (context) {
+                  // ── Search mode ──
+                  if (viewModel.isSearchMode) {
+                    final results = viewModel.searchResults;
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                          child: Row(
+                            children: [
+                              if (viewModel.isSearchLoading)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppTheme.accentBlue,
+                                  ),
+                                )
+                              else
+                                Icon(
+                                  Icons.search,
+                                  size: 16,
+                                  color: AppTheme.textGrey,
+                                ),
+                              const SizedBox(width: 8),
+                              Text(
+                                viewModel.isSearchLoading
+                                    ? 'Searching…  ${results.length} found'
+                                    : '${results.length} results for "${viewModel.searchQuery}"',
+                                style: const TextStyle(
+                                  color: AppTheme.textGrey,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (results.isEmpty && !viewModel.isSearchLoading)
+                          Expanded(
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.search_off,
+                                    size: 70,
+                                    color: AppTheme.textGrey,
+                                  ),
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    'No results for "${viewModel.searchQuery}"',
+                                    style: const TextStyle(
+                                      color: AppTheme.textGrey,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: results.length,
+                              itemBuilder: (context, i) => _FileListItem(
+                                key: ValueKey(results[i].path),
+                                item: results[i],
+                                viewModel: viewModel,
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  }
+
+                  // ── Normal browse mode ──
                   if (viewModel.isLoading) {
                     return const Center(
                       child: CircularProgressIndicator(
@@ -508,7 +686,9 @@ class AllFilesView extends StatelessWidget {
         BottomNavigationBarItem(icon: Icon(Icons.more_vert), label: 'More'),
       ],
       onTap: (index) {
-        if (index == 2) {
+        if (index == 1) {
+          _showTagSelectionSheet(context, viewModel);
+        } else if (index == 2) {
           viewModel.copySelected();
         } else if (index == 3) {
           _showDeleteConfirmationDialog(context, viewModel);
@@ -516,6 +696,25 @@ class AllFilesView extends StatelessWidget {
           _showMoreBottomSheet(context, viewModel);
         }
       },
+    );
+  }
+
+  void _showTagSelectionSheet(
+    BuildContext context,
+    AllFilesViewModel viewModel,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => TagSelectionSheet(
+        onTagSelected: (tagName) {
+          viewModel.tagSelectedItems(tagName);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Items added to tag: $tagName')),
+          );
+        },
+      ),
     );
   }
 
@@ -733,10 +932,13 @@ class _FileListItem extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        if (viewModel.isSelectionMode) {
+        if (viewModel.isSelectionMode ||
+            (viewModel.isFolderPickerMode && item.isDirectory)) {
           viewModel.toggleSelection(item.path);
         } else if (item.isDirectory) {
           viewModel.navigateTo(item.path);
+        } else {
+          FileOpener.openFile(context, item.path);
         }
       },
       onLongPress: () {
@@ -777,7 +979,8 @@ class _FileListItem extends StatelessWidget {
                 ],
               ),
             ),
-            if (viewModel.isSelectionMode)
+            if (viewModel.isSelectionMode ||
+                (viewModel.isFolderPickerMode && item.isDirectory))
               Icon(
                 isSelected ? Icons.check_box : Icons.check_box_outline_blank,
                 color: isSelected ? AppTheme.accentBlue : AppTheme.textGrey,
@@ -830,10 +1033,13 @@ class _FileGridItem extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        if (viewModel.isSelectionMode) {
+        if (viewModel.isSelectionMode ||
+            (viewModel.isFolderPickerMode && item.isDirectory)) {
           viewModel.toggleSelection(item.path);
         } else if (item.isDirectory) {
           viewModel.navigateTo(item.path);
+        } else {
+          FileOpener.openFile(context, item.path);
         }
       },
       onLongPress: () {
@@ -899,6 +1105,16 @@ class _FileGridItem extends StatelessWidget {
                 ),
               ],
             ),
+            if (viewModel.isFolderPickerMode && item.isDirectory)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(
+                  isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                  color: isSelected ? AppTheme.accentBlue : AppTheme.textGrey,
+                  size: 20,
+                ),
+              ),
           ],
         ),
       ),
