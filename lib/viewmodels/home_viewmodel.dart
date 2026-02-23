@@ -1,12 +1,47 @@
 import 'package:flutter/material.dart';
 import '../models/category_model.dart';
 import '../theme/app_theme.dart';
+import '../services/storage_service.dart';
 
 class HomeViewModel extends ChangeNotifier {
+  final StorageService _storageService = StorageService();
+
   // Storage Stats
-  final String totalStorage = '64.0 GB';
-  final String usedStorage = '56.5 GB';
-  final double storagePercentage = 56.5 / 64.0;
+  String totalStorage = '...';
+  String usedStorage = '...';
+  double storagePercentage = 0.0;
+  bool isLoadingStats = true;
+
+  HomeViewModel() {
+    loadStorageData();
+  }
+
+  Future<void> loadStorageData() async {
+    isLoadingStats = true;
+    notifyListeners();
+
+    // Ask for permissions before we try reading disk directly
+    bool hasPermission = await _storageService.requestStoragePermission();
+
+    if (hasPermission) {
+      double totalGB = await _storageService.getTotalDiskSpaceGB();
+      double usedGB = await _storageService.getUsedDiskSpaceGB();
+
+      totalStorage = '${totalGB.toStringAsFixed(1)} GB';
+      usedStorage = '${usedGB.toStringAsFixed(1)} GB';
+
+      if (totalGB > 0) {
+        storagePercentage = usedGB / totalGB;
+      }
+    } else {
+      totalStorage = 'Permission Denied';
+      usedStorage = '0 GB';
+      storagePercentage = 0.0;
+    }
+
+    isLoadingStats = false;
+    notifyListeners();
+  }
 
   // Categories Grid Data
   final List<CategoryModel> categories = [

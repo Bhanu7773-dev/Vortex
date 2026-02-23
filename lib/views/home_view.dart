@@ -15,7 +15,7 @@ class HomeView extends StatelessWidget {
       create: (_) => HomeViewModel(),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('My Files'),
+          title: const Text('Vortex'),
           actions: [
             IconButton(icon: const Icon(Icons.search), onPressed: () {}),
             IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),

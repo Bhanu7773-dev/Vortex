@@ -4,7 +4,9 @@ class AppTheme {
   // True Black color palette based on requirements
   static const Color backgroundBlack = Color(0xFF000000);
   static const Color cardGrey = Color(0xFF1B1B1B);
-  static const Color accentBlue = Color(0xFF3F75FF); // From the cleaner button
+  static const Color accentBlue = Color(
+    0xFF6EBEFB,
+  ); // Matched to the Folder Cyan hue
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGrey = Color(0xFFAAAAAA);
 
