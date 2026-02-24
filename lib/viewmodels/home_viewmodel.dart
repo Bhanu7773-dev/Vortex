@@ -301,10 +301,21 @@ class HomeViewModel extends ChangeNotifier {
 
   void _navigateToSource(BuildContext context, String title) async {
     String path = '';
-    if (title == 'Bluetooth')
-      path = '/storage/emulated/0/Bluetooth';
-    else if (title == 'Downloads')
-      path = '/storage/emulated/0/Download';
+    if (Platform.isAndroid) {
+      if (title == 'Bluetooth')
+        path = '/storage/emulated/0/Bluetooth';
+      else if (title == 'Downloads')
+        path = '/storage/emulated/0/Download';
+    } else if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      final home =
+          Platform.environment['HOME'] ??
+          Platform.environment['USERPROFILE'] ??
+          '/';
+      if (title == 'Bluetooth')
+        path = '$home/Bluetooth'; // Guessing
+      else if (title == 'Downloads')
+        path = '$home/Downloads';
+    }
 
     if (path.isNotEmpty && Directory(path).existsSync()) {
       await Navigator.push(
@@ -313,9 +324,9 @@ class HomeViewModel extends ChangeNotifier {
       );
       _loadPersistentData();
     } else if (path.isNotEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$title folder not found')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$title folder not found at $path')),
+      );
     }
   }
 

@@ -20,6 +20,14 @@ class _WifiScanViewState extends State<WifiScanView> {
     });
   }
 
+  @override
+  void dispose() {
+    // Stop listening for devices when we leave the scan screen so we don't
+    // hold the UDP receive socket open indefinitely.
+    context.read<DiscoveryService>().stopDiscovery();
+    super.dispose();
+  }
+
   Future<void> _startDiscoveryAndServer() async {
     final discovery = context.read<DiscoveryService>();
     final connectionManager = context.read<ConnectionManager>();
@@ -85,7 +93,7 @@ class _WifiScanViewState extends State<WifiScanView> {
                         itemCount: services.length,
                         itemBuilder: (context, index) {
                           final service = services[index];
-                          final rawName = service.name ?? 'Unknown Device';
+                          final rawName = service.name;
                           final name = rawName.replaceAll(
                             RegExp(r'\s*\(\d+\)$'),
                             '',
@@ -101,20 +109,17 @@ class _WifiScanViewState extends State<WifiScanView> {
                             title: Text(name),
                             subtitle: const Text('Tap to Link'),
                             onTap: () async {
-                              if (service.host != null &&
-                                  service.port != null) {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => PairCodeView(
-                                      isInitiator: true,
-                                      targetIp: service.host!,
-                                      targetPort: service.port!,
-                                      targetDeviceName: name,
-                                    ),
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PairCodeView(
+                                    isInitiator: true,
+                                    targetIp: service.host,
+                                    targetPort: service.port,
+                                    targetDeviceName: name,
                                   ),
-                                );
-                              }
+                                ),
+                              );
                             },
                           );
                         },

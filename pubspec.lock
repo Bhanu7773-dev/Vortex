@@ -360,54 +360,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.5.0"
-  nsd:
-    dependency: "direct main"
-    description:
-      name: nsd
-      sha256: "1611a5c9f61d56ff2973e1488ae04112103e5203b4a7a1fb594b48cfb366fc14"
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.1.0"
-  nsd_android:
-    dependency: transitive
-    description:
-      name: nsd_android
-      sha256: "96d2d451c5db0319c37b1b2a38f2d55eb56ae54c0b0d3144c03c19c97436de4a"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.2.0"
-  nsd_ios:
-    dependency: transitive
-    description:
-      name: nsd_ios
-      sha256: "562fffe753543a65190344d3acd0ed80d96c571ac1a05bf10780c5584b5055ac"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.1"
-  nsd_macos:
-    dependency: transitive
-    description:
-      name: nsd_macos
-      sha256: "47cd355d84009befe02710c72bf1c1999b24d5f3fb3a3d914f8b77bcaca42542"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.1"
-  nsd_platform_interface:
-    dependency: transitive
-    description:
-      name: nsd_platform_interface
-      sha256: b1a5ace6f01ea2ce37f373e52c3b7af4fd7c11de2582ddcc89f4fc00615d9dff
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.2.0"
-  nsd_windows:
-    dependency: transitive
-    description:
-      name: nsd_windows
-      sha256: "68b4a256b0be258dbbad0ae789f2e8838d0935a353dac86b17c14c1a05df4ecd"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.0.1"
   open_filex:
     dependency: "direct main"
     description:

@@ -8,6 +8,10 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class ConnectionManager extends ChangeNotifier {
+  // Fixed port so it can be opened in the OS firewall once and for all.
+  // UDP discovery uses 46465; the HTTP/WebSocket server uses 46466.
+  static const int serverFixedPort = 46466;
+
   HttpServer? _httpServer;
 
   // Maps deviceName -> WebSocketChannel
@@ -34,12 +38,16 @@ class ConnectionManager extends ChangeNotifier {
     deviceId = _uuid.v4();
   }
 
-  /// Starts the background HTTP server on a random available port
+  /// Starts the background HTTP server on the fixed Vortex port.
   Future<void> startServer() async {
     if (_httpServer != null) return;
 
     try {
-      _httpServer = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+      _httpServer = await HttpServer.bind(
+        InternetAddress.anyIPv4,
+        serverFixedPort,
+        shared: true,  // allows re-binding after hot-restart
+      );
       debugPrint('Vortex Server listening on port: ${_httpServer!.port}');
 
       _httpServer!.listen((HttpRequest request) async {

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:network_info_plus/network_info_plus.dart';
@@ -32,9 +33,18 @@ class _HomeViewState extends State<HomeView> {
           // Remove potential exact quotes around SSID
           _networkName = wifiName.replaceAll('"', '');
         });
+      } else if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+        setState(() {
+          _networkName = 'Local Network';
+        });
       }
     } catch (e) {
       debugPrint('Failed to get network name: $e');
+      if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+        setState(() {
+          _networkName = 'Local Network';
+        });
+      }
     }
   }
 

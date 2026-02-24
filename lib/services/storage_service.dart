@@ -8,13 +8,27 @@ import 'package:disk_space_2/disk_space_2.dart';
 class StorageService {
   /// Returns a list of available storage volumes (Internal + SD Cards).
   Future<List<StorageVolume>> getStorageVolumes() async {
-    List<StorageVolume> volumes = [
-      StorageVolume(
-        path: '/storage/emulated/0',
-        name: 'Internal Storage',
-        isInternal: true,
-      ),
-    ];
+    List<StorageVolume> volumes = [];
+    if (Platform.isAndroid) {
+      volumes.add(
+        StorageVolume(
+          path: '/storage/emulated/0',
+          name: 'Internal Storage',
+          isInternal: true,
+        ),
+      );
+    } else if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+      volumes.add(
+        StorageVolume(
+          path:
+              Platform.environment['HOME'] ??
+              Platform.environment['USERPROFILE'] ??
+              '/',
+          name: 'Home Directory',
+          isInternal: true,
+        ),
+      );
+    }
 
     if (Platform.isAndroid) {
       try {
@@ -55,6 +69,15 @@ class StorageService {
   /// it always redirects to the Settings page instead of showing a popup.
   /// Detailed status of permissions
   Future<Map<String, bool>> getPermissionStatus() async {
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      return {
+        'manageExternalStorage': true,
+        'storage': true,
+        'photos': true,
+        'videos': true,
+        'audio': true,
+      };
+    }
     return {
       'manageExternalStorage': await Permission.manageExternalStorage.isGranted,
       'storage': await Permission.storage.isGranted,
@@ -72,6 +95,8 @@ class StorageService {
   }
 
   Future<bool> requestStoragePermission() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return true;
+
     // On Android 11+, we really want MANAGE_EXTERNAL_STORAGE for a file manager.
     if (Platform.isAndroid) {
       // 1. Try granular/legacy first just to get basic access
@@ -124,6 +149,21 @@ class StorageService {
   }
 
   Future<double> getTotalDiskSpaceGB() async {
+    if (Platform.isLinux || Platform.isMacOS) {
+      try {
+        final result = await Process.run('df', ['-k', '/']);
+        final lines = result.stdout.toString().split('\n');
+        if (lines.length > 1) {
+          final parts = lines[1].trim().split(RegExp(r'\s+'));
+          if (parts.length > 1) {
+            final kb = double.tryParse(parts[1]) ?? 0;
+            return _getAdvertisedStorage(kb / 1024.0 / 1024.0);
+          }
+        }
+      } catch (_) {}
+      return 64.0;
+    }
+
     try {
       final mb = await DiskSpace.getTotalDiskSpace;
       if (mb != null) {
@@ -136,6 +176,26 @@ class StorageService {
   }
 
   Future<double> getUsedDiskSpaceGB() async {
+    if (Platform.isLinux || Platform.isMacOS) {
+      try {
+        final result = await Process.run('df', ['-k', '/']);
+        final lines = result.stdout.toString().split('\n');
+        if (lines.length > 1) {
+          final parts = lines[1].trim().split(RegExp(r'\s+'));
+          if (parts.length > 2) {
+            final totalKb = double.tryParse(parts[1]) ?? 0;
+            final usedKb = double.tryParse(parts[2]) ?? 0;
+            final totalGB = totalKb / 1024.0 / 1024.0;
+            final usedGB = usedKb / 1024.0 / 1024.0;
+            final advertisedTotal = _getAdvertisedStorage(totalGB);
+            // maintain same ratio
+            return advertisedTotal * (usedGB / totalGB);
+          }
+        }
+      } catch (_) {}
+      return 56.5;
+    }
+
     try {
       final totalMb = await DiskSpace.getTotalDiskSpace;
       final freeMb = await DiskSpace.getFreeDiskSpace;

@@ -250,8 +250,14 @@ class AllFilesViewModel extends ChangeNotifier {
     }
 
     // 2. Fetch fresh data quietly in background
-    if (await Permission.manageExternalStorage.isGranted ||
-        await Permission.storage.isGranted) {
+    bool hasPermission = true;
+    if (Platform.isAndroid || Platform.isIOS) {
+      hasPermission =
+          await Permission.manageExternalStorage.isGranted ||
+          await Permission.storage.isGranted;
+    }
+
+    if (hasPermission) {
       final dir = Directory(currentPath);
 
       try {

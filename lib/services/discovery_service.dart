@@ -1,115 +1,253 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
-import 'package:nsd/nsd.dart' as nsd;
+
+class DiscoveredDevice {
+  final String name;
+  final String host;
+  final int port;
+
+  DiscoveredDevice({
+    required this.name,
+    required this.host,
+    required this.port,
+  });
+}
+
+/// Holds a sender socket bound to a specific network interface.
+class _InterfaceSender {
+  final String interfaceIp;
+  final String broadcastAddress;
+  final RawDatagramSocket socket;
+
+  _InterfaceSender({
+    required this.interfaceIp,
+    required this.broadcastAddress,
+    required this.socket,
+  });
+}
 
 class DiscoveryService extends ChangeNotifier {
-  static const String serviceType = '_vortex._tcp';
+  static const int broadcastPort = 46465;
 
-  nsd.Discovery? _discovery;
-  nsd.Registration? _registration;
+  RawDatagramSocket? _receiver;
+  // One sender socket per network interface so broadcasts go out on the
+  // correct interface with the correct source IP address.
+  final List<_InterfaceSender> _senders = [];
+  bool _isDiscovering = false;
+  Timer? _broadcastTimer;
 
-  List<nsd.Service> _discoveredServices = [];
-  List<nsd.Service> get discoveredServices => _discoveredServices;
+  final Map<String, DiscoveredDevice> _uniqueServices = {};
+  List<DiscoveredDevice> get discoveredServices =>
+      _uniqueServices.values.toList();
 
   String? _registeredName;
+  int? _registeredPort;
+  final Set<String> _localIps = {};
   String get registeredName => _registeredName ?? 'Vortex Device';
 
-  bool get isDiscovering => _discovery != null;
-  bool get isRegistered => _registration != null;
+  bool get isDiscovering => _isDiscovering;
+  bool get isRegistered => _broadcastTimer != null;
 
-  /// Starts listening for other Vortex devices on the local network
+  /// Starts listening for other Vortex devices on the local network.
   Future<void> startDiscovery() async {
-    if (_discovery != null) return;
+    if (_isDiscovering) return;
+    _isDiscovering = true;
+    _uniqueServices.clear();
+    notifyListeners();
 
     try {
-      _discovery = await nsd.startDiscovery(serviceType);
-      _discovery!.addListener(() {
-        final uniqueServices = <String, nsd.Service>{};
+      _receiver = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        broadcastPort,
+        reuseAddress: true,
+        reusePort: true,
+      );
+      _receiver!.broadcastEnabled = true;
 
-        for (final service in _discovery!.services) {
-          // Aggressively strip '(2)', '(3)' etc. which happen when mDNS caches records across hot restarts
-          // e.g. "RMX3762 (2)" becomes "RMX3762"
-          String rawName = service.name ?? 'Unknown Device';
-          String baseName = rawName.replaceAll(RegExp(r'\s*\(\d+\)$'), '');
+      _receiver!.listen((RawSocketEvent event) {
+        if (event != RawSocketEvent.read) return;
+        final datagram = _receiver!.receive();
+        if (datagram == null) return;
 
-          // Filter out our own device using the base name! This ensures that even if we hot restart
-          // and get a new deviceId, the ghost record of our old deviceId (which shares our base name)
-          // will still be filtered out perfectly.
-          if (_registeredName != null && baseName == _registeredName) {
-            continue;
-          }
+        try {
+          final jsonString = utf8.decode(datagram.data);
+          final data = jsonDecode(jsonString);
+          if (data['type'] != 'vortex_discovery' ||
+              data['name'] == null ||
+              data['port'] == null) return;
 
-          // Group by base name to perfectly squash all ghost records of another device into exactly 1 entry
-          uniqueServices[baseName] = service;
-        }
+          final host = datagram.address.address;
+          final senderName = data['name'] as String;
 
-        _discoveredServices = uniqueServices.values.toList();
-        notifyListeners();
+          // Filter out our own packets by name or source IP.
+          if (_registeredName != null && senderName == _registeredName) return;
+          if (_localIps.isNotEmpty && _localIps.contains(host)) return;
+
+          debugPrint('[Discovery] Heard from "$senderName" at $host');
+          _handleResolvedService(
+            DiscoveredDevice(name: senderName, host: host, port: data['port']),
+          );
+        } catch (_) {}
       });
-      debugPrint('Started mDNS discovery for $serviceType');
+
+      debugPrint('[Discovery] Receiver bound on port $broadcastPort');
     } catch (e) {
-      debugPrint('Error starting discovery: $e');
+      debugPrint('[Discovery] Error starting receiver: $e');
+      _isDiscovering = false;
     }
   }
 
-  /// Stops listening for other devices
-  Future<void> stopDiscovery() async {
-    if (_discovery == null) return;
-
-    try {
-      await nsd.stopDiscovery(_discovery!);
-      _discovery = null;
-      _discoveredServices.clear();
-      notifyListeners();
-      debugPrint('Stopped mDNS discovery');
-    } catch (e) {
-      debugPrint('Error stopping discovery: $e');
-    }
+  void _handleResolvedService(DiscoveredDevice service) {
+    final baseName = service.name.replaceAll(RegExp(r'\s*\(\d+\)$'), '');
+    if (_registeredName != null && baseName == _registeredName) return;
+    _uniqueServices[baseName] = service;
+    notifyListeners();
   }
 
-  /// Broadcasts this device's presence on the network
+  /// Stops listening for other devices.
+  void stopDiscovery() {
+    if (!_isDiscovering) return;
+    _isDiscovering = false;
+    _receiver?.close();
+    _receiver = null;
+    _uniqueServices.clear();
+    notifyListeners();
+    debugPrint('[Discovery] Receiver stopped');
+  }
+
+  /// Broadcasts this device's presence once per interface so each packet
+  /// carries the correct source IP for that subnet.
   Future<void> registerService(
     String deviceName,
     String deviceId,
     int port,
   ) async {
-    if (_registration != null) return;
+    if (_broadcastTimer != null) return;
 
     _registeredName = deviceName;
+    _registeredPort = port;
 
     try {
-      final service = nsd.Service(
-        name: deviceName,
-        type: serviceType,
-        port: port,
-        txt: {
-          'platform': Uint8List.fromList(Platform.operatingSystem.codeUnits),
-          'deviceId': Uint8List.fromList(deviceId.codeUnits),
-        }, // Optional metadata
+      _localIps.clear();
+      for (var sender in _senders) {
+        sender.socket.close();
+      }
+      _senders.clear();
+
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLinkLocal: false,
       );
 
-      _registration = await nsd.register(service);
-      debugPrint('Registered mDNS service $deviceName on port $port');
+      for (var iface in interfaces) {
+        for (var addr in iface.addresses) {
+          if (addr.isLoopback) continue;
+
+          // Skip obviously virtual interfaces (Docker, VirtualBox, VMware, VPN)
+          final name = iface.name.toLowerCase();
+          if (name.startsWith('docker') ||
+              name.startsWith('virbr') ||
+              name.startsWith('veth') ||
+              name.startsWith('br-') ||
+              name.startsWith('vmnet') ||
+              name.startsWith('tun') ||
+              name.startsWith('tap')) continue;
+
+          _localIps.add(addr.address);
+          final parts = addr.address.split('.');
+          if (parts.length != 4) continue;
+          final subnetBcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
+
+          try {
+            // Bind sender to THIS interface's IP so the UDP source address
+            // is the correct WiFi/Ethernet IP — not a Docker or VPN address.
+            final sock = await RawDatagramSocket.bind(
+              InternetAddress(addr.address),
+              0,
+              reuseAddress: true,
+            );
+            sock.broadcastEnabled = true;
+            _senders.add(_InterfaceSender(
+              interfaceIp: addr.address,
+              broadcastAddress: subnetBcast,
+              socket: sock,
+            ));
+            debugPrint(
+              '[Discovery] Sender bound to ${addr.address} '
+              '→ broadcasts $subnetBcast (${iface.name})',
+            );
+          } catch (e) {
+            debugPrint('[Discovery] Could not bind sender on ${addr.address}: $e');
+          }
+        }
+      }
+
+      // Fallback: if no interface sockets succeeded, use 0.0.0.0 → 255.255.255.255
+      if (_senders.isEmpty) {
+        final sock = await RawDatagramSocket.bind(
+          InternetAddress.anyIPv4,
+          0,
+          reuseAddress: true,
+        );
+        sock.broadcastEnabled = true;
+        _senders.add(_InterfaceSender(
+          interfaceIp: '0.0.0.0',
+          broadcastAddress: '255.255.255.255',
+          socket: sock,
+        ));
+        debugPrint('[Discovery] Fallback sender on 0.0.0.0');
+      }
+
+      _broadcastTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        _broadcastDiscoveryPacket();
+      });
+      _broadcastDiscoveryPacket();
+
+      debugPrint(
+        '[Discovery] Registered "$deviceName" port $port '
+        'localIps: $_localIps',
+      );
       notifyListeners();
     } catch (e) {
-      debugPrint('Error registering service: $e');
+      debugPrint('[Discovery] Error registering: $e');
     }
   }
 
-  /// Stops broadcasting this device's presence
-  Future<void> unregisterService() async {
-    if (_registration == null) return;
-
-    try {
-      await nsd.unregister(_registration!);
-      _registration = null;
-      debugPrint('Unregistered mDNS service');
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error unregistering service: $e');
+  void _broadcastDiscoveryPacket() {
+    if (_senders.isEmpty || _registeredName == null || _registeredPort == null) {
+      return;
     }
+    final bytes = utf8.encode(jsonEncode({
+      'type': 'vortex_discovery',
+      'name': _registeredName,
+      'port': _registeredPort,
+    }));
+
+    for (final sender in _senders) {
+      try {
+        sender.socket.send(
+          bytes,
+          InternetAddress(sender.broadcastAddress),
+          broadcastPort,
+        );
+      } catch (_) {}
+    }
+  }
+
+  /// Stops broadcasting this device's presence.
+  void unregisterService() {
+    if (_broadcastTimer == null) return;
+    _broadcastTimer!.cancel();
+    _broadcastTimer = null;
+    for (var s in _senders) {
+      s.socket.close();
+    }
+    _senders.clear();
+    _localIps.clear();
+    debugPrint('[Discovery] Unregistered');
+    notifyListeners();
   }
 
   @override
@@ -119,3 +257,4 @@ class DiscoveryService extends ChangeNotifier {
     super.dispose();
   }
 }
+

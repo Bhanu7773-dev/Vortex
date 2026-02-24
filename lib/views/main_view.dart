@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:vortex/services/connection_manager.dart';
@@ -65,16 +66,26 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       });
 
       connectionManager.onIncomingLinkRequest = (deviceName, pairCode) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PairCodeView(
-              isInitiator: false,
-              targetDeviceName: deviceName,
-              incomingCode: pairCode,
+        // On Linux desktop the UI can be completely idle (no animations, no
+        // repaints) so Flutter never schedules a new frame.  addPostFrameCallback
+        // is only drained at frame boundaries, so without an explicit
+        // ensureVisualUpdate() the callback would sit in the queue forever and
+        // Navigator.push would never execute — the pairing code screen would
+        // never appear.
+        SchedulerBinding.instance.ensureVisualUpdate();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => PairCodeView(
+                isInitiator: false,
+                targetDeviceName: deviceName,
+                incomingCode: pairCode,
+              ),
             ),
-          ),
-        );
+          );
+        });
       };
     });
   }
@@ -95,6 +106,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8.0,
+        height: 80.0,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
