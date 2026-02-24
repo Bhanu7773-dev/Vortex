@@ -1,12 +1,105 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:network_info_plus/network_info_plus.dart';
+import 'package:vortex/services/connection_manager.dart';
 import '../viewmodels/home_viewmodel.dart';
 import '../widgets/storage_card.dart';
 import '../widgets/category_grid.dart';
 import '../widgets/expandable_list.dart';
 
-class HomeView extends StatelessWidget {
+class HomeView extends StatefulWidget {
   const HomeView({Key? key}) : super(key: key);
+
+  @override
+  State<HomeView> createState() => _HomeViewState();
+}
+
+class _HomeViewState extends State<HomeView> {
+  String _networkName = 'Wi-Fi / Hotspot';
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNetworkName();
+  }
+
+  Future<void> _fetchNetworkName() async {
+    try {
+      final info = NetworkInfo();
+      final wifiName = await info.getWifiName();
+      if (wifiName != null && wifiName.isNotEmpty) {
+        setState(() {
+          // Remove potential exact quotes around SSID
+          _networkName = wifiName.replaceAll('"', '');
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to get network name: $e');
+    }
+  }
+
+  void _showConnectedDevicesSheet(BuildContext context, ConnectionManager cm) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24.0),
+                child: Text(
+                  'Linked Devices',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (cm.connectedDeviceNames.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    'No devices connected.',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                )
+              else
+                ...cm.connectedDeviceNames.map(
+                  (deviceName) => ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Colors.blue,
+                      child: Icon(Icons.smartphone, color: Colors.white),
+                    ),
+                    title: Text(
+                      deviceName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    trailing: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                      ),
+                      onPressed: () {
+                        cm.disconnectDevice(deviceName);
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.link_off, size: 20),
+                      label: const Text('Unlink'),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +214,129 @@ class HomeView extends StatelessWidget {
                       ),
                     ),
                   ),
+                SliverToBoxAdapter(
+                  child: Consumer<ConnectionManager>(
+                    builder: (context, connectionManager, child) {
+                      if (!connectionManager.isLinked)
+                        return const SizedBox.shrink();
+
+                      // We use Consumer for DiscoveryService just to get the network name if possible,
+                      // but mostly to show the connected state.
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: Colors.blue.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.wifi,
+                                          color: Colors.blue,
+                                          size: 16,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Network',
+                                          style: TextStyle(
+                                            color: Colors.grey,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _networkName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => _showConnectedDevicesSheet(
+                                  context,
+                                  connectionManager,
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: Colors.green.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Row(
+                                        children: [
+                                          Icon(
+                                            Icons.link,
+                                            color: Colors.green,
+                                            size: 16,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'Linked Devices',
+                                            style: TextStyle(
+                                              color: Colors.grey,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        connectionManager
+                                                    .connectedDeviceNames
+                                                    .length ==
+                                                1
+                                            ? connectionManager
+                                                  .connectedDeviceNames
+                                                  .first
+                                            : '${connectionManager.connectedDeviceNames.first} +${connectionManager.connectedDeviceNames.length - 1}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
                 SliverToBoxAdapter(
                   child: StorageCard(
                     totalStorage: viewModel.totalStorage,

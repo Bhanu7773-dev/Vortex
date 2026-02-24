@@ -145,6 +145,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
+  device_info_plus:
+    dependency: "direct main"
+    description:
+      name: device_info_plus
+      sha256: "98f28b42168cc509abc92f88518882fd58061ea372d7999aecc424345c7bff6a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "11.5.0"
+  device_info_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: device_info_plus_platform_interface
+      sha256: e1ea89119e34903dca74b883d0dd78eb762814f97fb6c76f35e9ff74d261a18f
+      url: "https://pub.dev"
+    source: hosted
+    version: "7.0.3"
   disk_space_2:
     dependency: "direct main"
     description:
@@ -320,6 +336,78 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  network_info_plus:
+    dependency: "direct main"
+    description:
+      name: network_info_plus
+      sha256: f926b2ba86aa0086a0dfbb9e5072089bc213d854135c1712f1d29fc89ba3c877
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.1.4"
+  network_info_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: network_info_plus_platform_interface
+      sha256: "7e7496a8a9d8136859b8881affc613c4a21304afeb6c324bcefc4bd0aff6b94b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.2"
+  nm:
+    dependency: transitive
+    description:
+      name: nm
+      sha256: "2c9aae4127bdc8993206464fcc063611e0e36e72018696cd9631023a31b24254"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.0"
+  nsd:
+    dependency: "direct main"
+    description:
+      name: nsd
+      sha256: "1611a5c9f61d56ff2973e1488ae04112103e5203b4a7a1fb594b48cfb366fc14"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.1.0"
+  nsd_android:
+    dependency: transitive
+    description:
+      name: nsd_android
+      sha256: "96d2d451c5db0319c37b1b2a38f2d55eb56ae54c0b0d3144c03c19c97436de4a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
+  nsd_ios:
+    dependency: transitive
+    description:
+      name: nsd_ios
+      sha256: "562fffe753543a65190344d3acd0ed80d96c571ac1a05bf10780c5584b5055ac"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.1"
+  nsd_macos:
+    dependency: transitive
+    description:
+      name: nsd_macos
+      sha256: "47cd355d84009befe02710c72bf1c1999b24d5f3fb3a3d914f8b77bcaca42542"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.1"
+  nsd_platform_interface:
+    dependency: transitive
+    description:
+      name: nsd_platform_interface
+      sha256: b1a5ace6f01ea2ce37f373e52c3b7af4fd7c11de2582ddcc89f4fc00615d9dff
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
+  nsd_windows:
+    dependency: transitive
+    description:
+      name: nsd_windows
+      sha256: "68b4a256b0be258dbbad0ae789f2e8838d0935a353dac86b17c14c1a05df4ecd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.1"
   open_filex:
     dependency: "direct main"
     description:
@@ -606,7 +694,7 @@ packages:
     source: hosted
     version: "1.4.0"
   uuid:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: uuid
       sha256: "1fef9e8e11e2991bb773070d4656b7bd5d850967a2456cfc83cf47925ba79489"
@@ -701,6 +789,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
+  web_socket_channel:
+    dependency: "direct main"
+    description:
+      name: web_socket_channel
+      sha256: d88238e5eac9a42bb43ca4e721edba3c08c6354d4a53063afaa568516217621b
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.4.0"
   win32:
     dependency: transitive
     description:
@@ -709,6 +805,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.15.0"
+  win32_registry:
+    dependency: transitive
+    description:
+      name: win32_registry
+      sha256: "6f1b564492d0147b330dd794fee8f512cec4977957f310f9951b5f9d83618dae"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.0"
   xdg_directories:
     dependency: transitive
     description:
