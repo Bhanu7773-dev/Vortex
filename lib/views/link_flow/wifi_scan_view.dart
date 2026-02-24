@@ -12,9 +12,16 @@ class WifiScanView extends StatefulWidget {
 }
 
 class _WifiScanViewState extends State<WifiScanView> {
+  // Cache Provider references so dispose() never looks up a deactivated
+  // widget's ancestor.
+  late final DiscoveryService _discoveryService;
+  late final ConnectionManager _connectionManager;
+
   @override
   void initState() {
     super.initState();
+    _discoveryService = context.read<DiscoveryService>();
+    _connectionManager = context.read<ConnectionManager>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startDiscoveryAndServer();
     });
@@ -22,24 +29,21 @@ class _WifiScanViewState extends State<WifiScanView> {
 
   @override
   void dispose() {
-    // Stop listening for devices when we leave the scan screen so we don't
-    // hold the UDP receive socket open indefinitely.
-    context.read<DiscoveryService>().stopDiscovery();
+    // Use cached reference — context.read() would crash here.
+    _discoveryService.stopDiscovery();
     super.dispose();
   }
 
   Future<void> _startDiscoveryAndServer() async {
-    final discovery = context.read<DiscoveryService>();
-    final connectionManager = context.read<ConnectionManager>();
+    if (!mounted) return;
+    await _discoveryService.startDiscovery();
+    await _connectionManager.startServer();
 
-    await discovery.startDiscovery();
-    await connectionManager.startServer();
-
-    final port = connectionManager.serverPort;
-    if (port != null) {
-      await discovery.registerService(
-        discovery.registeredName,
-        connectionManager.deviceId,
+    final port = _connectionManager.serverPort;
+    if (port != null && mounted) {
+      await _discoveryService.registerService(
+        _discoveryService.registeredName,
+        _connectionManager.deviceId,
         port,
       );
     }

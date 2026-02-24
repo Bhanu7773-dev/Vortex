@@ -27,13 +27,21 @@ class _PairCodeViewState extends State<PairCodeView> {
   final _codeController = TextEditingController();
   bool _isConnecting = false;
 
+  // Cache Provider references so we never look up a deactivated widget's
+  // ancestor in dispose() or async callbacks.
+  late final ConnectionManager _connectionManager;
+  late final DiscoveryService _discoveryService;
+
   @override
   void initState() {
     super.initState();
+    _connectionManager = context.read<ConnectionManager>();
+    _discoveryService = context.read<DiscoveryService>();
+
     if (widget.isInitiator) {
       _sendLinkRequest();
     }
-    context.read<ConnectionManager>().onConnectionEstablished = () {
+    _connectionManager.onConnectionEstablished = () {
       if (mounted) {
         Navigator.popUntil(context, (route) => route.isFirst);
       }
@@ -42,35 +50,33 @@ class _PairCodeViewState extends State<PairCodeView> {
 
   @override
   void dispose() {
-    // We only remove the listener if we are the one being disposed,
-    // to avoid clearing a new connection's listener by accident if things happen fast.
-    final cm = context.read<ConnectionManager>();
-    if (cm.onConnectionEstablished != null) {
-      cm.onConnectionEstablished = null;
+    _codeController.dispose();
+    // Use the cached reference — context.read() would crash here because
+    // the widget is already deactivated.
+    if (_connectionManager.onConnectionEstablished != null) {
+      _connectionManager.onConnectionEstablished = null;
     }
     super.dispose();
   }
 
   Future<void> _sendLinkRequest() async {
-    final myDeviceName = context.read<DiscoveryService>().registeredName;
-    final success = await context.read<ConnectionManager>().sendLinkRequest(
+    final myDeviceName = _discoveryService.registeredName;
+    final success = await _connectionManager.sendLinkRequest(
       widget.targetIp!,
       widget.targetPort!,
       myDeviceName,
     );
-    if (!success) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Failed to request link')));
-        Navigator.pop(context);
-      }
+    if (!success && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to request link')));
+      Navigator.pop(context);
     }
   }
 
   Future<void> _verifyAndConnect() async {
     setState(() => _isConnecting = true);
-    final success = await context.read<ConnectionManager>().connectWebSocket(
+    final success = await _connectionManager.connectWebSocket(
       widget.targetIp!,
       widget.targetPort!,
       _codeController.text,
