@@ -31,25 +31,35 @@ class PhotosViewModel extends ChangeNotifier {
 
   List<PhotoAlbum> albums = [];
   bool isLoading = true;
+  bool _disposed = false;
 
   PhotosViewModel() {
     _loadAlbums();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _loadAlbums() async {
     isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     // Map from folder path -> list of photo files in that folder (non-recursive)
     final Map<String, List<File>> folderMap = {};
 
     final volumes = await StorageService().getStorageVolumes();
     for (final vol in volumes) {
+      if (_disposed) return;
       final root = Directory(vol.path);
       if (await root.exists()) {
         await _scanForAlbums(root, folderMap);
       }
     }
+
+    if (_disposed) return;
 
     // Build album list — only folders that have at least 1 photo
     final result = <PhotoAlbum>[];
@@ -71,13 +81,24 @@ class PhotosViewModel extends ChangeNotifier {
 
     albums = result;
     isLoading = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
+
+  static const _kSkipDirs = {
+    'Android', '.cache', '.local', '.config', '.mozilla', '.npm',
+    '.pub-cache', '.dart', '.pub', '.gradle', '.android', '.flutter',
+    '.git', 'node_modules', 'proc', 'sys', 'dev', 'run', 'snap',
+    'AppData', r'$Recycle.Bin', 'Windows', 'Program Files',
+    'Program Files (x86)', 'ProgramData',
+  };
 
   Future<void> _scanForAlbums(
     Directory dir,
-    Map<String, List<File>> map,
-  ) async {
+    Map<String, List<File>> map, {
+    int depth = 0,
+  }) async {
+    final maxDepth = Platform.isAndroid ? 20 : 4;
+    if (depth > maxDepth) return;
     try {
       final List<FileSystemEntity> children = await dir
           .list(recursive: false, followLinks: false)
@@ -99,15 +120,9 @@ class PhotosViewModel extends ChangeNotifier {
       for (final child in children.whereType<Directory>()) {
         try {
           final name = child.path.split('/').last;
-          if (name == 'Android') {
-            // Special case for Android/media
-            final mediaDir = Directory('${child.path}/media');
-            if (mediaDir.existsSync()) {
-              await _scanForAlbums(mediaDir, map);
-            }
-          } else {
-            await _scanForAlbums(child, map);
-          }
+          if (!Platform.isAndroid && name.startsWith('.')) continue;
+          if (_kSkipDirs.contains(name)) continue;
+          await _scanForAlbums(child, map, depth: depth + 1);
         } catch (_) {}
       }
     } catch (_) {}
@@ -134,14 +149,21 @@ class PhotoAlbumDetailViewModel extends ChangeNotifier {
 
   bool isSelectionMode = false;
   final Set<String> selectedPaths = {};
+  bool _disposed = false;
 
   PhotoAlbumDetailViewModel(this.folderPath) {
     _load();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     final dir = Directory(folderPath);
     final found = <File>[];
@@ -150,6 +172,7 @@ class PhotoAlbumDetailViewModel extends ChangeNotifier {
         recursive: false,
         followLinks: false,
       )) {
+        if (_disposed) return;
         if (entity is File) {
           final ext = entity.path.split('.').last.toLowerCase();
           if (_photoExts.contains(ext)) found.add(entity);
@@ -157,6 +180,7 @@ class PhotoAlbumDetailViewModel extends ChangeNotifier {
       }
     } catch (_) {}
 
+    if (_disposed) return;
     found.sort((a, b) {
       try {
         return b.statSync().modified.compareTo(a.statSync().modified);
@@ -166,13 +190,13 @@ class PhotoAlbumDetailViewModel extends ChangeNotifier {
     });
     photos = found;
     isLoading = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleSelectionMode() {
     isSelectionMode = !isSelectionMode;
     if (!isSelectionMode) selectedPaths.clear();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleSelection(String path) {
@@ -182,24 +206,24 @@ class PhotoAlbumDetailViewModel extends ChangeNotifier {
     } else {
       selectedPaths.add(path);
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void selectAll() {
     selectedPaths.addAll(photos.map((f) => f.path));
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void cancelSelection() {
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void enterSelectionWith(String path) {
     isSelectionMode = true;
     selectedPaths.add(path);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> deleteSelected() async {
@@ -211,6 +235,6 @@ class PhotoAlbumDetailViewModel extends ChangeNotifier {
     photos.removeWhere((f) => selectedPaths.contains(f.path));
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

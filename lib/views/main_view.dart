@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -5,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:vortex/services/connection_manager.dart';
 import 'package:vortex/services/discovery_service.dart';
+import 'package:vortex/services/transfer_service.dart';
 import 'package:vortex/views/link_flow/wifi_scan_view.dart';
 import 'package:vortex/views/link_flow/pair_code_view.dart';
 import 'package:vortex/views/recent_view.dart';
@@ -19,8 +21,15 @@ class MainWrapperView extends StatefulWidget {
 
 class _MainWrapperViewState extends State<MainWrapperView> {
   int _currentIndex = 1; // Start on 'Files' tab as per original plan
+  Timer? _frameTimer;
 
   final List<Widget> _pages = const [RecentView(), HomeView()];
+
+  @override
+  void dispose() {
+    _frameTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -87,7 +96,67 @@ class _MainWrapperViewState extends State<MainWrapperView> {
           );
         });
       };
-    });
+
+      connectionManager.onFileReceived = (relativePath, savedPath) {
+        SchedulerBinding.instance.ensureVisualUpdate();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF1E1E1E),
+              content: Row(
+                children: [
+                  const Icon(
+                    Icons.download_done,
+                    color: Colors.greenAccent,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Received: $relativePath',
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        });
+      };
+
+      // ── Receive-progress wiring ──────────────────────────────────────────
+      final transferService = context.read<TransferService>();
+
+      connectionManager.onFileReceiveStart = (id, relativePath, totalBytes) {
+        transferService.startReceive(
+          id: id,
+          relativePath: relativePath,
+          totalBytes: totalBytes,
+        );
+      };
+
+      connectionManager.onFileReceiveProgress = (id, receivedBytes) {
+        transferService.updateReceive(id: id, receivedBytes: receivedBytes);
+      };
+
+      connectionManager.onFileReceiveComplete = (id, relativePath, savedPath) {
+        transferService.completeReceive(id: id, savedPath: savedPath);
+      };
+    }); // end addPostFrameCallback
+
+    // On Linux/Windows/macOS Flutter stops scheduling frames when the UI is
+    // idle (no animations, no input). This prevents incoming network events
+    // (pairing codes, file-received snackbars) from ever painting. A cheap
+    // periodic tick keeps the engine alive without burning battery on mobile.
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      _frameTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+        if (mounted) SchedulerBinding.instance.ensureVisualUpdate();
+      });
+    }
   }
 
   @override
@@ -106,7 +175,6 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       bottomNavigationBar: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8.0,
-        height: 80.0,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
@@ -125,40 +193,24 @@ class _MainWrapperViewState extends State<MainWrapperView> {
     required int index,
   }) {
     final isSelected = _currentIndex == index;
-    // Explicitly use blue for the selected color instead of primaryColor which might be black in the current theme
     final color = isSelected ? Colors.blue : Colors.grey;
     return InkWell(
-      onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
-      },
-      borderRadius: BorderRadius.circular(24),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      onTap: () => setState(() => _currentIndex = index),
+      borderRadius: BorderRadius.circular(20),
+      child: SizedBox(
+        width: 72,
+        height: 40,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20.0,
-                vertical: 6.0,
-              ),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? Colors.blue.withOpacity(0.15)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Icon(icon, color: color, size: 26),
-            ),
-            const SizedBox(height: 4),
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
                 color: color,
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
             ),

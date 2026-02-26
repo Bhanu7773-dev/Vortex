@@ -2,6 +2,18 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
 
+// Dirs to skip on every platform during recursive media scans.
+const _kSkipDirs = {
+  'Android', '.cache', '.local', '.config', '.mozilla', '.npm',
+  '.pub-cache', '.dart', '.pub', '.gradle', '.android', '.flutter',
+  '.git', 'node_modules', 'proc', 'sys', 'dev', 'run', 'snap',
+  'AppData', r'$Recycle.Bin', 'Windows', 'Program Files',
+  'Program Files (x86)', 'ProgramData',
+};
+
+const int _kMaxDepthDesktop = 4;
+const int _kMaxDepthAndroid = 20;
+
 // ─── Model ───────────────────────────────────
 class VideoAlbum {
   final String name;
@@ -32,19 +44,28 @@ class VideosViewModel extends ChangeNotifier {
 
   List<VideoAlbum> albums = [];
   bool isLoading = true;
+  bool _disposed = false;
 
   VideosViewModel() {
     _load();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final map = <String, List<File>>{};
     final volumes = await StorageService().getStorageVolumes();
     for (final vol in volumes) {
+      if (_disposed) return;
       await _scanDir(Directory(vol.path), map);
     }
+    if (_disposed) return;
     albums =
         map.entries
             .where((e) => e.value.isNotEmpty)
@@ -59,10 +80,14 @@ class VideosViewModel extends ChangeNotifier {
             .toList()
           ..sort((a, b) => b.count.compareTo(a.count));
     isLoading = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
-  Future<void> _scanDir(Directory dir, Map<String, List<File>> map) async {
+  Future<void> _scanDir(Directory dir, Map<String, List<File>> map,
+      {int depth = 0}) async {
+    final maxDepth =
+        Platform.isAndroid ? _kMaxDepthAndroid : _kMaxDepthDesktop;
+    if (depth > maxDepth) return;
     try {
       final children = await dir
           .list(recursive: false, followLinks: false)
@@ -75,12 +100,9 @@ class VideosViewModel extends ChangeNotifier {
       for (final sub in children.whereType<Directory>()) {
         try {
           final name = sub.path.split('/').last;
-          if (name == 'Android') {
-            final media = Directory('${sub.path}/media');
-            if (media.existsSync()) await _scanDir(media, map);
-          } else {
-            await _scanDir(sub, map);
-          }
+          if (!Platform.isAndroid && name.startsWith('.')) continue;
+          if (_kSkipDirs.contains(name)) continue;
+          await _scanDir(sub, map, depth: depth + 1);
         } catch (_) {}
       }
     } catch (_) {}
@@ -105,22 +127,31 @@ class VideoAlbumDetailViewModel extends ChangeNotifier {
   bool isLoading = true;
   bool isSelectionMode = false;
   final Set<String> selectedPaths = {};
+  bool _disposed = false;
 
   VideoAlbumDetailViewModel(this.folderPath) {
     _load();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     try {
       final found = <File>[];
       await for (final e in Directory(
         folderPath,
       ).list(recursive: false, followLinks: false)) {
+        if (_disposed) return;
         if (e is File && _exts.contains(e.path.split('.').last.toLowerCase()))
           found.add(e);
       }
+      if (_disposed) return;
       found.sort((a, b) {
         try {
           return b.statSync().modified.compareTo(a.statSync().modified);
@@ -130,20 +161,21 @@ class VideoAlbumDetailViewModel extends ChangeNotifier {
       });
       videos = found;
     } catch (_) {}
+    if (_disposed) return;
     isLoading = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void enterSelectionWith(String path) {
     isSelectionMode = true;
     selectedPaths.add(path);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleSelectionMode() {
     isSelectionMode = !isSelectionMode;
     if (!isSelectionMode) selectedPaths.clear();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleSelection(String path) {
@@ -151,18 +183,18 @@ class VideoAlbumDetailViewModel extends ChangeNotifier {
         ? selectedPaths.remove(path)
         : selectedPaths.add(path);
     if (selectedPaths.isEmpty) isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void selectAll() {
     selectedPaths.addAll(videos.map((f) => f.path));
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void cancelSelection() {
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> deleteSelected() async {
@@ -174,7 +206,7 @@ class VideoAlbumDetailViewModel extends ChangeNotifier {
     videos.removeWhere((f) => selectedPaths.contains(f.path));
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }
 
@@ -243,27 +275,40 @@ class MediaListViewModel extends ChangeNotifier {
   String activeFilter = 'All';
   bool isSelectionMode = false;
   final Set<String> selectedPaths = {};
+  bool _disposed = false;
 
   MediaListViewModel(this._exts, {this.rootPath = '/storage/emulated/0'}) {
     _load();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _load() async {
     isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
     final found = <_FileItem>[];
     final volumes = await StorageService().getStorageVolumes();
     for (final vol in volumes) {
+      if (_disposed) return;
       await _scanDir(Directory(vol.path), found);
     }
+    if (_disposed) return;
     found.sort((a, b) => b.modified.compareTo(a.modified));
     _allItems = found;
     filteredItems = found;
     isLoading = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
-  Future<void> _scanDir(Directory dir, List<_FileItem> out) async {
+  Future<void> _scanDir(Directory dir, List<_FileItem> out,
+      {int depth = 0}) async {
+    final maxDepth =
+        Platform.isAndroid ? _kMaxDepthAndroid : _kMaxDepthDesktop;
+    if (depth > maxDepth) return;
     try {
       await for (final e in dir.list(recursive: false, followLinks: false)) {
         try {
@@ -272,16 +317,11 @@ class MediaListViewModel extends ChangeNotifier {
             out.add(_FileItem(e));
           } else if (e is Directory) {
             final name = e.path.split('/').last;
-            if (name == 'Android') {
-              final media = Directory('${e.path}/media');
-              if (media.existsSync()) await _scanDir(media, out);
-            } else {
-              await _scanDir(e, out);
-            }
+            if (!Platform.isAndroid && name.startsWith('.')) continue;
+            if (_kSkipDirs.contains(name)) continue;
+            await _scanDir(e, out, depth: depth + 1);
           }
-        } catch (_) {
-          // Skip problematic item and continue scanning
-        }
+        } catch (_) {}
       }
     } catch (_) {}
   }
@@ -307,19 +347,19 @@ class MediaListViewModel extends ChangeNotifier {
       base = base.where((f) => f.name.toLowerCase().contains(q)).toList();
     }
     filteredItems = base;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void enterSelectionWith(String path) {
     isSelectionMode = true;
     selectedPaths.add(path);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleSelectionMode() {
     isSelectionMode = !isSelectionMode;
     if (!isSelectionMode) selectedPaths.clear();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleSelection(String path) {
@@ -327,18 +367,18 @@ class MediaListViewModel extends ChangeNotifier {
         ? selectedPaths.remove(path)
         : selectedPaths.add(path);
     if (selectedPaths.isEmpty) isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void selectAll() {
     selectedPaths.addAll(filteredItems.map((f) => f.file.path));
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void cancelSelection() {
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> deleteSelected() async {
@@ -351,6 +391,6 @@ class MediaListViewModel extends ChangeNotifier {
     filteredItems.removeWhere((f) => selectedPaths.contains(f.file.path));
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 }

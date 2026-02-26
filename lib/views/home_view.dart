@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:vortex/services/connection_manager.dart';
+import 'package:vortex/services/transfer_service.dart';
+import 'package:vortex/views/receive_view.dart';
 import '../viewmodels/home_viewmodel.dart';
 import '../widgets/storage_card.dart';
 import '../widgets/category_grid.dart';
@@ -25,6 +27,12 @@ class _HomeViewState extends State<HomeView> {
   }
 
   Future<void> _fetchNetworkName() async {
+    // WifiManager.getConnectionInfo() (used internally by network_info_plus) is
+    // a synchronous Android IPC binder call that can block the platform thread
+    // for several seconds on many devices, causing dropped frames and ANRs.
+    // The SSID label is cosmetic, so we simply skip the call on Android.
+    if (Platform.isAndroid) return;
+
     try {
       final info = NetworkInfo();
       final wifiName = await info.getWifiName();
@@ -119,7 +127,43 @@ class _HomeViewState extends State<HomeView> {
         appBar: AppBar(
           title: const Text('Vortex'),
           actions: [
-            IconButton(icon: const Icon(Icons.search), onPressed: () {}),
+            Consumer<TransferService>(
+              builder: (context, ts, _) {
+                final hasActive = ts.hasActiveReceive;
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      tooltip: 'Incoming files',
+                      icon: const Icon(Icons.download_rounded),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ReceiveView(),
+                        ),
+                      ),
+                    ),
+                    if (hasActive)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFF121212),
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
             IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
           ],
         ),

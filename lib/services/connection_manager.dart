@@ -3,22 +3,36 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'transfer_service.dart';
 
 class ConnectionManager extends ChangeNotifier {
   // Fixed port so it can be opened in the OS firewall once and for all.
   // UDP discovery uses 46465; the HTTP/WebSocket server uses 46466.
+  // Raw TCP file transfer uses 46467 for maximum throughput.
   static const int serverFixedPort = 46466;
+  static const int tcpTransferPort = 46467;
 
   HttpServer? _httpServer;
+  ServerSocket? _tcpServer;
+
+  // Active incoming TCP sockets keyed by receive-job ID so they can be
+  // cancelled from the UI.
+  final Map<String, Socket> _activeReceiveSockets = {};
 
   // Maps deviceName -> WebSocketChannel
   final Map<String, WebSocketChannel> _activeChannels = {};
 
+  // Maps deviceName -> IP address (populated when a WebSocket is established)
+  final Map<String, String> _deviceIps = {};
+
+  // Pending connection being accepted on the server side
   String? _currentPairCode;
-  String? _pendingDeviceName; // Temporarily store the requester's name
+  String? _pendingDeviceName;
+  String? _pendingDeviceIp;
 
   // Callback when another device wants to link with this one
   // Provides (requesterDeviceName, generatedPairCode)
@@ -27,9 +41,21 @@ class ConnectionManager extends ChangeNotifier {
   // Callback when WebSocket is successfully connected
   VoidCallback? onConnectionEstablished;
 
+  // Callback when a file is fully received: (relativePath, savedPath)
+  Function(String relativePath, String savedPath)? onFileReceived;
+
+  // Progress callbacks for incoming receive
+  Function(String id, String relativePath, int totalBytes)? onFileReceiveStart;
+  Function(String id, int receivedBytes)? onFileReceiveProgress;
+  Function(String id, String relativePath, String savedPath)?
+  onFileReceiveComplete;
+
   bool get isLinked => _activeChannels.isNotEmpty;
   List<String> get connectedDeviceNames => _activeChannels.keys.toList();
   int? get serverPort => _httpServer?.port;
+
+  /// Returns the IP address stored for [deviceName], or null if unknown.
+  String? getDeviceIp(String deviceName) => _deviceIps[deviceName];
 
   final _uuid = const Uuid();
   late final String deviceId;
@@ -46,7 +72,7 @@ class ConnectionManager extends ChangeNotifier {
       _httpServer = await HttpServer.bind(
         InternetAddress.anyIPv4,
         serverFixedPort,
-        shared: true,  // allows re-binding after hot-restart
+        shared: true, // allows re-binding after hot-restart
       );
       debugPrint('Vortex Server listening on port: ${_httpServer!.port}');
 
@@ -55,6 +81,8 @@ class ConnectionManager extends ChangeNotifier {
           await _handleLinkRequest(request);
         } else if (request.uri.path == '/ws') {
           await _handleWebSocketUpgrade(request);
+        } else if (request.uri.path == '/upload' && request.method == 'POST') {
+          await _handleUpload(request);
         } else {
           request.response
             ..statusCode = HttpStatus.notFound
@@ -63,6 +91,167 @@ class ConnectionManager extends ChangeNotifier {
       });
     } catch (e) {
       debugPrint('Failed to start server: $e');
+    }
+
+    // ── Raw TCP transfer server (high-speed) ──────────────────────────────
+    try {
+      _tcpServer = await ServerSocket.bind(
+        InternetAddress.anyIPv4,
+        tcpTransferPort,
+        shared: true,
+      );
+      debugPrint('Vortex TCP transfer server on port: $tcpTransferPort');
+      _tcpServer!.listen(_handleTcpClient);
+    } catch (e) {
+      debugPrint('Failed to start TCP transfer server: $e');
+    }
+  }
+
+  // ── Raw TCP file receive handler ──────────────────────────────────────────
+  void _handleTcpClient(Socket socket) async {
+    final jobId = _uuid.v4();
+    _activeReceiveSockets[jobId] = socket;
+
+    // Disable Nagle for lower latency ACK.
+    socket.setOption(SocketOption.tcpNoDelay, true);
+
+    try {
+      // ── Phase 1: read the JSON header (everything up to first '\n') ────
+      final headerBytes = <int>[];
+      List<int>? leftover; // bytes after '\n' that belong to the file
+      bool headerDone = false;
+
+      final completer = Completer<void>();
+      late StreamSubscription<List<int>> sub;
+
+      sub = socket.listen(
+        (chunk) {
+          if (headerDone) return;
+          for (int i = 0; i < chunk.length; i++) {
+            if (chunk[i] == 0x0A) {
+              // '\n'
+              headerDone = true;
+              if (i + 1 < chunk.length) {
+                leftover = chunk.sublist(i + 1);
+              }
+              sub.pause();
+              completer.complete();
+              return;
+            }
+            headerBytes.add(chunk[i]);
+          }
+        },
+        onError: (e) {
+          if (!completer.isCompleted) completer.completeError(e);
+        },
+        onDone: () {
+          if (!completer.isCompleted) completer.complete();
+        },
+      );
+
+      await completer.future;
+
+      if (headerBytes.isEmpty) {
+        sub.cancel();
+        _activeReceiveSockets.remove(jobId);
+        await socket.close();
+        return;
+      }
+
+      final header = jsonDecode(utf8.decode(headerBytes));
+      final relativePath = header['path'] as String? ?? 'received_file';
+      final totalBytes = header['size'] as int? ?? -1;
+
+      // ── Prepare destination file ──────────────────────────────────────
+      final saveDir = await TransferService.getReceiveDir();
+      final parts = relativePath.split('/');
+      final fileName = parts.last;
+      final Directory targetDir;
+      if (parts.length > 1) {
+        targetDir = Directory(
+          '${saveDir.path}/${parts.sublist(0, parts.length - 1).join('/')}',
+        );
+        await targetDir.create(recursive: true);
+      } else {
+        targetDir = saveDir;
+      }
+      final file = File('${targetDir.path}/$fileName');
+      final sink = file.openWrite();
+
+      onFileReceiveStart?.call(jobId, relativePath, totalBytes);
+
+      // ── Phase 2: stream file bytes (reuse the SAME subscription) ──────
+      int received = 0;
+      bool cancelled = false;
+
+      if (leftover != null && leftover!.isNotEmpty) {
+        sink.add(leftover!);
+        received += leftover!.length;
+        onFileReceiveProgress?.call(jobId, received);
+      }
+
+      if (totalBytes > 0 && received >= totalBytes) {
+        sub.cancel();
+      } else {
+        final dataCompleter = Completer<void>();
+        int pendingNotify = 0;
+
+        sub.onData((chunk) {
+          if (chunk.isEmpty) return;
+
+          sink.add(chunk);
+          received += chunk.length;
+          pendingNotify += chunk.length;
+
+          if (totalBytes > 0 && received >= totalBytes) {
+            onFileReceiveProgress?.call(jobId, received);
+            sub.cancel();
+            if (!dataCompleter.isCompleted) dataCompleter.complete();
+          } else if (pendingNotify >= 65536) {
+            pendingNotify = 0;
+            onFileReceiveProgress?.call(jobId, received);
+          }
+        });
+        sub.onError((e) {
+          cancelled = true;
+          sub.cancel();
+          if (!dataCompleter.isCompleted) dataCompleter.complete();
+        });
+        sub.onDone(() {
+          if (!dataCompleter.isCompleted) dataCompleter.complete();
+        });
+
+        sub.resume();
+        await dataCompleter.future;
+      }
+
+      await sink.flush();
+      await sink.close();
+      _activeReceiveSockets.remove(jobId);
+
+      if (!cancelled) {
+        socket.add([0x06]); // ACK
+        onFileReceiveComplete?.call(jobId, relativePath, file.path);
+      } else {
+        onFileReceiveComplete?.call(jobId, relativePath, file.path);
+      }
+      await socket.close();
+    } catch (e) {
+      debugPrint('[TCP Receive] Error: $e');
+      _activeReceiveSockets.remove(jobId);
+      try {
+        await socket.close();
+      } catch (_) {}
+    }
+  }
+
+  /// Cancel an active receive job by jobId (closes socket)
+  void cancelReceiveJob(String jobId) {
+    final sock = _activeReceiveSockets.remove(jobId);
+    if (sock != null) {
+      try {
+        sock.destroy();
+      } catch (_) {}
     }
   }
 
@@ -76,6 +265,7 @@ class ConnectionManager extends ChangeNotifier {
       // Generate a random 6 digit code
       _currentPairCode = (Random().nextInt(900000) + 100000).toString();
       _pendingDeviceName = requesterName;
+      _pendingDeviceIp = request.connectionInfo?.remoteAddress.address;
 
       // Notify the UI to show the code to the user
       if (onIncomingLinkRequest != null) {
@@ -108,12 +298,13 @@ class ConnectionManager extends ChangeNotifier {
 
     if (WebSocketTransformer.isUpgradeRequest(request)) {
       final socket = await WebSocketTransformer.upgrade(request);
-      _setupChannel(
-        _pendingDeviceName ?? 'Unknown Device',
-        IOWebSocketChannel(socket),
-      );
+      final deviceName = _pendingDeviceName ?? 'Unknown Device';
+      final deviceIp =
+          _pendingDeviceIp ?? request.connectionInfo?.remoteAddress.address;
+      _setupChannel(deviceName, IOWebSocketChannel(socket), ip: deviceIp);
       _currentPairCode = null; // Clear code after successful use
       _pendingDeviceName = null;
+      _pendingDeviceIp = null;
     } else {
       request.response
         ..statusCode = HttpStatus.badRequest
@@ -152,7 +343,7 @@ class ConnectionManager extends ChangeNotifier {
       final wsUrl = Uri.parse('ws://$ip:$port/ws?code=$code');
       final socket = await WebSocket.connect(wsUrl.toString());
       final channel = IOWebSocketChannel(socket);
-      _setupChannel(targetDeviceName, channel);
+      _setupChannel(targetDeviceName, channel, ip: ip);
       return true;
     } catch (e) {
       debugPrint('Error connecting WebSocket: $e');
@@ -162,33 +353,146 @@ class ConnectionManager extends ChangeNotifier {
 
   // ============== COMMON WEBSOCKET LOGIC ==============
 
-  void _setupChannel(String deviceName, WebSocketChannel channel) {
+  /// Schedules [notifyListeners] on the next frame so it never fires while
+  /// the widget tree is locked (e.g. during layout or a build pass).
+  void _safeNotify() {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!_disposed) notifyListeners();
+    });
+  }
+
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    disconnectAll();
+    _httpServer?.close(force: true);
+    _tcpServer?.close();
+    for (final sock in _activeReceiveSockets.values) {
+      try {
+        sock.destroy();
+      } catch (_) {}
+    }
+    _activeReceiveSockets.clear();
+    super.dispose();
+  }
+
+  void _setupChannel(
+    String deviceName,
+    WebSocketChannel channel, {
+    String? ip,
+  }) {
     if (_activeChannels.containsKey(deviceName)) {
       _activeChannels[deviceName]!.sink.close();
     }
 
     _activeChannels[deviceName] = channel;
+    if (ip != null) _deviceIps[deviceName] = ip;
 
-    debugPrint('Vortex Devices Linked Successfully! ($deviceName)');
-    onConnectionEstablished?.call();
-    notifyListeners();
+    debugPrint('Vortex Devices Linked Successfully! ($deviceName, ip: $ip)');
+
+    // Defer UI callbacks to the next frame — they may call Navigator.pop /
+    // setState which crash if fired while the widget tree is locked.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      onConnectionEstablished?.call();
+    });
+    _safeNotify();
 
     channel.stream.listen(
       (message) {
         debugPrint('Received message from $deviceName: $message');
-        // TODO: Handle incoming files, ping/pong, etc.
       },
       onDone: () {
         debugPrint('WebSocket connection closed with $deviceName');
         _activeChannels.remove(deviceName);
-        notifyListeners();
+        _safeNotify();
       },
       onError: (error) {
         debugPrint('WebSocket error with $deviceName: $error');
         _activeChannels.remove(deviceName);
-        notifyListeners();
+        _safeNotify();
       },
     );
+  }
+
+  // ============== FILE RECEIVE ==============
+
+  Future<void> _handleUpload(HttpRequest request) async {
+    final jobId = _uuid.v4();
+    String relativePath = 'received_file';
+    File? file;
+    try {
+      final encoded = request.headers.value('x-vortex-path') ?? 'received_file';
+      relativePath = Uri.decodeComponent(encoded);
+
+      // Content-Length may be -1 when the sender does not provide it.
+      final totalBytes = request.contentLength;
+
+      final saveDir = await TransferService.getReceiveDir();
+
+      // Preserve subdirectory structure inside the Vortex folder
+      final parts = relativePath.split('/');
+      final fileName = parts.last;
+      final Directory targetDir;
+      if (parts.length > 1) {
+        targetDir = Directory(
+          '${saveDir.path}/${parts.sublist(0, parts.length - 1).join('/')}',
+        );
+        await targetDir.create(recursive: true);
+      } else {
+        targetDir = saveDir;
+      }
+
+      file = File('${targetDir.path}/$fileName');
+      final sink = file.openWrite();
+
+      // Notify: transfer starting
+      onFileReceiveStart?.call(jobId, relativePath, totalBytes);
+
+      int received = 0;
+      int pendingNotify = 0;
+      await for (final chunk in request) {
+        sink.add(chunk);
+        received += chunk.length;
+        pendingNotify += chunk.length;
+
+        if (totalBytes > 0 && received >= totalBytes) {
+          onFileReceiveProgress?.call(jobId, received);
+        } else if (pendingNotify >= 65536) {
+          // 64KB threshold
+          pendingNotify = 0;
+          onFileReceiveProgress?.call(jobId, received);
+        }
+      }
+      // Ensure the final progress is sent if we exited early or had no totalBytes
+      if (pendingNotify > 0) {
+        onFileReceiveProgress?.call(jobId, received);
+      }
+
+      await sink.flush();
+      await sink.close();
+
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({'status': 'ok', 'path': file.path}))
+        ..close();
+
+      debugPrint('[Upload] Saved: $relativePath → ${file.path}');
+      onFileReceived?.call(relativePath, file.path);
+      onFileReceiveComplete?.call(jobId, relativePath, file.path);
+    } catch (e) {
+      debugPrint('[Upload] Error: $e');
+      if (file != null) {
+        onFileReceiveComplete?.call(jobId, relativePath, file.path);
+      }
+      try {
+        request.response
+          ..statusCode = HttpStatus.internalServerError
+          ..close();
+      } catch (_) {}
+    }
   }
 
   void sendMessageToAll(String message) {
@@ -199,8 +503,9 @@ class ConnectionManager extends ChangeNotifier {
 
   Future<void> disconnectDevice(String deviceName) async {
     final channel = _activeChannels.remove(deviceName);
+    _deviceIps.remove(deviceName);
     await channel?.sink.close();
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> disconnectAll() async {
@@ -208,13 +513,7 @@ class ConnectionManager extends ChangeNotifier {
       await channel.sink.close();
     }
     _activeChannels.clear();
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    disconnectAll();
-    _httpServer?.close(force: true);
-    super.dispose();
+    _deviceIps.clear();
+    _safeNotify();
   }
 }

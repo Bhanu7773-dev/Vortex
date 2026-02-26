@@ -10,6 +10,7 @@ import '../views/tag_files_view.dart';
 class HomeViewModel extends ChangeNotifier {
   final StorageService _storageService = StorageService();
   final PersistenceService _persistenceService = PersistenceService();
+  bool _disposed = false;
 
   // Storage Stats
   String totalStorage = '...';
@@ -26,6 +27,12 @@ class HomeViewModel extends ChangeNotifier {
     _init();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _init() async {
     await checkAndRequestPermissions();
     _loadPersistentData();
@@ -37,7 +44,7 @@ class HomeViewModel extends ChangeNotifier {
     if (isPermissionGranted) {
       loadStorageData();
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   // Categories Grid Data
@@ -138,7 +145,7 @@ class HomeViewModel extends ChangeNotifier {
     final quickPaths = await _persistenceService.loadQuickAccessPaths();
     final tagMappings = await _persistenceService.loadTagMappings();
     _updateSections(quickPaths, tagMappings);
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void _updateSections(
@@ -409,7 +416,26 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> _scanDir(Directory dir, List<int> counts) async {
+  // Directories that are never useful to scan for media/docs on any platform.
+  static const _skipDirNames = {
+    // Android
+    'Android',
+    // Linux/macOS hidden + system
+    '.cache', '.local', '.config', '.mozilla', '.npm', '.pub-cache',
+    '.dart', '.pub', '.gradle', '.android', '.flutter', '.git',
+    'node_modules', 'proc', 'sys', 'dev', 'run', 'snap',
+    // Windows
+    'AppData', '\$Recycle.Bin', 'Windows', 'Program Files',
+    'Program Files (x86)', 'ProgramData',
+  };
+
+  Future<void> _scanDir(Directory dir, List<int> counts,
+      {int depth = 0}) async {
+    // On Linux/macOS/Windows limit recursion depth to avoid scanning
+    // the entire home directory tree and freezing the app.
+    final maxDepth = Platform.isAndroid ? 20 : 4;
+    if (depth > maxDepth) return;
+
     try {
       await for (final entity in dir.list(
         recursive: false,
@@ -420,9 +446,10 @@ class HomeViewModel extends ChangeNotifier {
             _countFile(entity.path.split('.').last.toLowerCase(), counts);
           } else if (entity is Directory) {
             final name = entity.path.split('/').last;
-            // Skip known fully-restricted subtrees to save time
-            if (name == 'Android') continue;
-            await _scanDir(entity, counts);
+            // Skip hidden dirs (dotfiles) on non-Android platforms
+            if (!Platform.isAndroid && name.startsWith('.')) continue;
+            if (_skipDirNames.contains(name)) continue;
+            await _scanDir(entity, counts, depth: depth + 1);
           }
         } catch (_) {}
       }
@@ -483,12 +510,16 @@ class HomeViewModel extends ChangeNotifier {
         info: counts[5].toString(),
       ),
     ];
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
+
+  /// Call this whenever you return from a category screen so the counts
+  /// are re-scanned without a full app restart.
+  Future<void> refreshCategoryCounts() => _scanCategoryCounts();
 
   Future<void> loadStorageData() async {
     isLoadingStats = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     bool hasPermission = await _storageService.requestStoragePermission();
     permissionStatus = await _storageService.getPermissionStatus();
@@ -518,7 +549,7 @@ class HomeViewModel extends ChangeNotifier {
     }
 
     isLoadingStats = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> _createTag(BuildContext context) async {

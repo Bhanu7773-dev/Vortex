@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
 import '../models/category_model.dart';
 import '../theme/app_theme.dart';
+import '../viewmodels/home_viewmodel.dart';
 import '../views/photos_view.dart';
 import '../views/videos_view.dart';
 import '../views/media_list_views.dart';
@@ -11,46 +13,51 @@ class CategoryGrid extends StatelessWidget {
 
   const CategoryGrid({Key? key, required this.categories}) : super(key: key);
 
-  void _onCategoryTap(BuildContext context, CategoryModel category) {
+  Future<void> _onCategoryTap(BuildContext context, CategoryModel category) async {
     switch (category.name) {
       case 'Photos':
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const PhotosView()),
         );
         break;
       case 'Videos':
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const VideosView()),
         );
         break;
       case 'Audio':
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const AudioView()),
         );
         break;
       case 'Archives':
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const ArchivesView()),
         );
         break;
       case 'APKs':
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const ApksView()),
         );
         break;
       case 'Documents':
-        Navigator.push(
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const DocumentsView()),
         );
         break;
       default:
-        break;
+        return;
+    }
+    // Re-scan counts after returning from any category screen so deletions
+    // are reflected immediately without a full app restart.
+    if (context.mounted) {
+      context.read<HomeViewModel>().refreshCategoryCounts();
     }
   }
 

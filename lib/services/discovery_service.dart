@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding, SchedulerPhase;
 
 class DiscoveredDevice {
   final String name;
@@ -31,6 +32,15 @@ class _InterfaceSender {
 class DiscoveryService extends ChangeNotifier {
   static const int broadcastPort = 46465;
 
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    stopDiscovery();
+    super.dispose();
+  }
+
   RawDatagramSocket? _receiver;
   // One sender socket per network interface so broadcasts go out on the
   // correct interface with the correct source IP address.
@@ -49,6 +59,19 @@ class DiscoveryService extends ChangeNotifier {
 
   bool get isDiscovering => _isDiscovering;
   bool get isRegistered => _broadcastTimer != null;
+
+  void _safeNotify() {
+    if (_disposed) return;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.transientCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!_disposed) notifyListeners();
+      });
+    } else {
+      notifyListeners();
+    }
+  }
 
   /// Starts listening for other Vortex devices on the local network.
   Future<void> startDiscovery() async {
@@ -103,7 +126,9 @@ class DiscoveryService extends ChangeNotifier {
     final baseName = service.name.replaceAll(RegExp(r'\s*\(\d+\)$'), '');
     if (_registeredName != null && baseName == _registeredName) return;
     _uniqueServices[baseName] = service;
-    notifyListeners();
+    if (!_disposed) {
+      _safeNotify();
+    }
   }
 
   /// Stops listening for other devices.
@@ -113,7 +138,9 @@ class DiscoveryService extends ChangeNotifier {
     _receiver?.close();
     _receiver = null;
     _uniqueServices.clear();
-    notifyListeners();
+    if (!_disposed) {
+      _safeNotify();
+    }
     debugPrint('[Discovery] Receiver stopped');
   }
 
@@ -248,13 +275,6 @@ class DiscoveryService extends ChangeNotifier {
     _localIps.clear();
     debugPrint('[Discovery] Unregistered');
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    stopDiscovery();
-    unregisterService();
-    super.dispose();
   }
 }
 

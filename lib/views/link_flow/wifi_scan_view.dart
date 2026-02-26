@@ -57,9 +57,10 @@ class _WifiScanViewState extends State<WifiScanView> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: Consumer<DiscoveryService>(
-        builder: (context, discovery, child) {
+      body: Consumer2<DiscoveryService, ConnectionManager>(
+        builder: (context, discovery, connection, child) {
           final services = discovery.discoveredServices;
+          final linkedNames = connection.connectedDeviceNames.toSet();
 
           return Column(
             children: [
@@ -102,29 +103,56 @@ class _WifiScanViewState extends State<WifiScanView> {
                             RegExp(r'\s*\(\d+\)$'),
                             '',
                           );
+                          final isLinked = linkedNames.contains(name);
+
                           return ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Colors.blue,
+                            leading: CircleAvatar(
+                              backgroundColor:
+                                  isLinked ? Colors.green : Colors.blue,
                               child: Icon(
-                                Icons.phone_android,
+                                isLinked
+                                    ? Icons.link
+                                    : Icons.phone_android,
                                 color: Colors.white,
                               ),
                             ),
-                            title: Text(name),
-                            subtitle: const Text('Tap to Link'),
-                            onTap: () async {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => PairCodeView(
-                                    isInitiator: true,
-                                    targetIp: service.host,
-                                    targetPort: service.port,
-                                    targetDeviceName: name,
-                                  ),
-                                ),
-                              );
-                            },
+                            title: Text(
+                              name,
+                              style: TextStyle(
+                                color: isLinked ? Colors.green : null,
+                                fontWeight: isLinked
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            subtitle: Text(
+                              isLinked ? 'Linked' : 'Tap to Link',
+                              style: TextStyle(
+                                color: isLinked ? Colors.green : Colors.grey,
+                              ),
+                            ),
+                            trailing: isLinked
+                                ? const Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green,
+                                  )
+                                : null,
+                            // Disable tap for already-linked devices
+                            onTap: isLinked
+                                ? null
+                                : () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => PairCodeView(
+                                          isInitiator: true,
+                                          targetIp: service.host,
+                                          targetPort: service.port,
+                                          targetDeviceName: name,
+                                        ),
+                                      ),
+                                    );
+                                  },
                           );
                         },
                       ),

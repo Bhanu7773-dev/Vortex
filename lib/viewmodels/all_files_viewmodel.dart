@@ -18,6 +18,7 @@ class AllFilesViewModel extends ChangeNotifier {
   List<String> pathHistory = [];
   bool isFolderPickerMode;
   final PersistenceService _persistenceService = PersistenceService();
+  bool _disposed = false;
 
   AllFilesViewModel({String? initialPath, this.isFolderPickerMode = false})
     : currentPath = initialPath ?? '/storage/emulated/0',
@@ -34,6 +35,12 @@ class AllFilesViewModel extends ChangeNotifier {
     _init();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _init() async {
     availableVolumes = await _storageService.getStorageVolumes();
     // Refresh rootPath from the detected volumes for accuracy
@@ -48,6 +55,11 @@ class AllFilesViewModel extends ChangeNotifier {
             ),
     );
     rootPath = currentVol.path;
+    // On non-Android platforms (Linux/macOS/Windows) the default
+    // '/storage/emulated/0' doesn't exist — reset to the actual root.
+    if (!Directory(currentPath).existsSync()) {
+      currentPath = rootPath;
+    }
     _loadDirectory();
   }
 
@@ -65,7 +77,7 @@ class AllFilesViewModel extends ChangeNotifier {
     // Clear selected paths and exit selection mode after tagging
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   String get currentFolderName {
@@ -164,11 +176,11 @@ class AllFilesViewModel extends ChangeNotifier {
     searchResults = [];
     isSearchLoading = true;
     isSearchMode = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     if (query.trim().isEmpty) {
       isSearchLoading = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return;
     }
 
@@ -177,7 +189,7 @@ class AllFilesViewModel extends ChangeNotifier {
 
     if (!_searchCancelled) {
       isSearchLoading = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -217,7 +229,7 @@ class AllFilesViewModel extends ChangeNotifier {
               ),
             );
           // Batch: notify every 15 results, not per-match
-          if (searchResults.length % 15 == 0) notifyListeners();
+          if (searchResults.length % 15 == 0 && !_disposed) notifyListeners();
         }
         if (entity is Directory && entity.path.split('/').last != 'Android') {
           await _deepScanForSearch(entity, q);
@@ -234,7 +246,7 @@ class AllFilesViewModel extends ChangeNotifier {
     searchQuery = '';
     searchResults = [];
     isSearchLoading = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> _loadDirectory() async {
@@ -242,11 +254,11 @@ class AllFilesViewModel extends ChangeNotifier {
     if (_cachedDirectories.containsKey(currentPath)) {
       items = _cachedDirectories[currentPath]!;
       isLoading = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     } else {
       items = []; // Ensure previous folder data is cleared before loading
       isLoading = true;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
 
     // 2. Fetch fresh data quietly in background
@@ -324,7 +336,7 @@ class AllFilesViewModel extends ChangeNotifier {
     }
 
     isLoading = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> deleteSelectedFiles() async {
@@ -349,7 +361,7 @@ class AllFilesViewModel extends ChangeNotifier {
 
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<String?> renameSelected(String newName) async {
@@ -389,7 +401,7 @@ class AllFilesViewModel extends ChangeNotifier {
 
       selectedPaths.clear();
       isSelectionMode = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       return null;
     } catch (e) {
       return 'Failed to rename: $e';
@@ -429,7 +441,7 @@ class AllFilesViewModel extends ChangeNotifier {
     // Unselect automatically after retrieving stats
     selectedPaths.clear();
     isSelectionMode = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     return details;
   }
@@ -465,7 +477,7 @@ class AllFilesViewModel extends ChangeNotifier {
       isDescending = false; // Reset to ascending for new sort type
     }
     _applySorting();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void _applySorting() {
@@ -544,7 +556,7 @@ class AllFilesViewModel extends ChangeNotifier {
 
   void toggleGridView() {
     isGridView = !isGridView;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleSelectionMode() {
@@ -552,7 +564,7 @@ class AllFilesViewModel extends ChangeNotifier {
     if (!isSelectionMode) {
       selectedPaths.clear();
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void toggleSelection(String path) {
@@ -561,17 +573,17 @@ class AllFilesViewModel extends ChangeNotifier {
     } else {
       selectedPaths.add(path);
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void selectAll() {
     selectedPaths = items.map((e) => e.path).toSet();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void clearSelection() {
     selectedPaths.clear();
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   // --- Navigation Methods ---
@@ -611,12 +623,12 @@ class AllFilesViewModel extends ChangeNotifier {
     clipboardPaths.clear();
     isPasteMode = false;
     isCut = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void cancelOngoingPaste() {
     _cancelRequested = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<int> _countTotalItems(List<String> paths) async {
@@ -644,7 +656,7 @@ class AllFilesViewModel extends ChangeNotifier {
     if (_totalItemsToPaste > 0) {
       pasteProgress = _itemsPasted / _totalItemsToPaste;
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<String?> pasteClipboard() async {
@@ -656,7 +668,7 @@ class AllFilesViewModel extends ChangeNotifier {
     _cancelRequested = false;
     _pastedDestinationPaths.clear();
     _itemsPasted = 0;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     try {
       _totalItemsToPaste = await _countTotalItems(clipboardPaths);
@@ -711,7 +723,7 @@ class AllFilesViewModel extends ChangeNotifier {
 
       if (_cancelRequested) {
         pasteStatus = 'Cancelling... Rolling back.';
-        notifyListeners();
+        if (!_disposed) notifyListeners();
         // Rollback
         for (final pastedPath in _pastedDestinationPaths) {
           try {
@@ -724,7 +736,7 @@ class AllFilesViewModel extends ChangeNotifier {
           } catch (_) {}
         }
         isPasting = false;
-        notifyListeners();
+        if (!_disposed) notifyListeners();
         return 'Pasting cancelled.';
       }
 
@@ -735,7 +747,7 @@ class AllFilesViewModel extends ChangeNotifier {
       return null; // Return null on success
     } catch (e) {
       isPasting = false;
-      notifyListeners();
+      if (!_disposed) notifyListeners();
       debugPrint('Paste Error: $e');
       if (e.toString().contains('already exists here.')) {
         return e.toString().replaceAll('Exception: ', '');

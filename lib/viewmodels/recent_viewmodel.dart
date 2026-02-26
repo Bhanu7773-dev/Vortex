@@ -8,24 +8,33 @@ class RecentViewModel with ChangeNotifier {
   String totalItemsText = '0 items in total';
   List<RecentSectionModel> sections = [];
   bool isLoading = true;
+  bool _disposed = false;
 
   RecentViewModel() {
     _loadRecentFiles();
   }
 
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> _loadRecentFiles() async {
     isLoading = true;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
 
     final List<File> allFiles = [];
     final volumes = await StorageService().getStorageVolumes();
 
     for (final vol in volumes) {
+      if (_disposed) return;
       final root = Directory(vol.path);
       if (await root.exists()) {
         await _scanDir(root, allFiles);
       }
     }
+    if (_disposed) return;
 
     // Sort by modification time descending
     allFiles.sort(
@@ -80,7 +89,7 @@ class RecentViewModel with ChangeNotifier {
     totalItemsText = '$total items in total';
 
     isLoading = false;
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   Future<void> _scanDir(Directory dir, List<File> out) async {
