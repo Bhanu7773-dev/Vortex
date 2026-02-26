@@ -31,15 +31,27 @@ class RecentViewModel with ChangeNotifier {
       if (_disposed) return;
       final root = Directory(vol.path);
       if (await root.exists()) {
-        await _scanDir(root, allFiles);
+        await _scanDir(root, allFiles, depth: 0);
       }
     }
     if (_disposed) return;
 
+    // Cache stats asynchronously to avoid O(N log N) statSync() calls on the main thread
+    final Map<String, FileStat> statCache = {};
+    for (var file in allFiles) {
+      if (_disposed) return;
+      try {
+        statCache[file.path] = await file.stat();
+      } catch (_) {}
+    }
+
     // Sort by modification time descending
-    allFiles.sort(
-      (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
-    );
+    allFiles.sort((a, b) {
+      final statA = statCache[a.path];
+      final statB = statCache[b.path];
+      if (statA == null || statB == null) return 0;
+      return statB.modified.compareTo(statA.modified);
+    });
 
     // Limit to 100 most recent files for performance
     final recentFiles = allFiles.take(100).toList();
@@ -48,7 +60,7 @@ class RecentViewModel with ChangeNotifier {
     final Map<String, List<RecentFileModel>> groups = {};
     for (final file in recentFiles) {
       try {
-        final stat = file.statSync();
+        final stat = statCache[file.path] ?? await file.stat();
         final dateGroup = _getDateGroup(stat.modified);
 
         final model = RecentFileModel(
@@ -72,8 +84,7 @@ class RecentViewModel with ChangeNotifier {
         )
         .toList();
 
-    // Sort sections (Today, Yesterday, etc.) - Actually the order of groups usually follows the sorted files
-    // But to be sure:
+    // Sort sections (Today, Yesterday, etc.)
     const order = ['Today', 'Yesterday'];
     sections.sort((a, b) {
       final idxA = order.indexOf(a.title);
@@ -92,22 +103,30 @@ class RecentViewModel with ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> _scanDir(Directory dir, List<File> out) async {
+  Future<void> _scanDir(Directory dir, List<File> out, {int depth = 0}) async {
+    if (depth > 6) return; // Prevent massive deep traversals on Linux Home dir
+    if (out.length > 3000) return; // Cap the max files to process
+
     try {
       final entities = await dir
           .list(recursive: false, followLinks: false)
           .toList();
       for (final e in entities) {
+        if (_disposed) return;
+        final name = e.path.split('/').last;
+        if (name.startsWith('.'))
+          continue; // Skip hidden folders like .cache, .android, etc.
+
         try {
           if (e is File) {
             out.add(e);
           } else if (e is Directory) {
-            final name = e.path.split('/').last;
             if (name == 'Android') {
               final media = Directory('${e.path}/media');
-              if (media.existsSync()) await _scanDir(media, out);
+              if (await media.exists())
+                await _scanDir(media, out, depth: depth + 1);
             } else {
-              await _scanDir(e, out);
+              await _scanDir(e, out, depth: depth + 1);
             }
           }
         } catch (_) {}

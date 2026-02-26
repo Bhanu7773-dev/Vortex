@@ -4,11 +4,31 @@ import '../services/storage_service.dart';
 
 // Dirs to skip on every platform during recursive media scans.
 const _kSkipDirs = {
-  'Android', '.cache', '.local', '.config', '.mozilla', '.npm',
-  '.pub-cache', '.dart', '.pub', '.gradle', '.android', '.flutter',
-  '.git', 'node_modules', 'proc', 'sys', 'dev', 'run', 'snap',
-  'AppData', r'$Recycle.Bin', 'Windows', 'Program Files',
-  'Program Files (x86)', 'ProgramData',
+  'Android',
+  '.cache',
+  '.local',
+  '.config',
+  '.mozilla',
+  '.npm',
+  '.pub-cache',
+  '.dart',
+  '.pub',
+  '.gradle',
+  '.android',
+  '.flutter',
+  '.git',
+  'node_modules',
+  'proc',
+  'sys',
+  'dev',
+  'run',
+  'snap',
+  'AppData',
+  r'$Recycle.Bin',
+  'Windows',
+  'Program Files',
+  'Program Files (x86)',
+  'ProgramData',
 };
 
 const int _kMaxDepthDesktop = 4;
@@ -83,10 +103,12 @@ class VideosViewModel extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> _scanDir(Directory dir, Map<String, List<File>> map,
-      {int depth = 0}) async {
-    final maxDepth =
-        Platform.isAndroid ? _kMaxDepthAndroid : _kMaxDepthDesktop;
+  Future<void> _scanDir(
+    Directory dir,
+    Map<String, List<File>> map, {
+    int depth = 0,
+  }) async {
+    final maxDepth = Platform.isAndroid ? _kMaxDepthAndroid : _kMaxDepthDesktop;
     if (depth > maxDepth) return;
     try {
       final children = await dir
@@ -152,12 +174,20 @@ class VideoAlbumDetailViewModel extends ChangeNotifier {
           found.add(e);
       }
       if (_disposed) return;
-      found.sort((a, b) {
+
+      final Map<String, FileStat> statCache = {};
+      for (var f in found) {
+        if (_disposed) return;
         try {
-          return b.statSync().modified.compareTo(a.statSync().modified);
-        } catch (_) {
-          return 0;
-        }
+          statCache[f.path] = await f.stat();
+        } catch (_) {}
+      }
+
+      found.sort((a, b) {
+        final statA = statCache[a.path];
+        final statB = statCache[b.path];
+        if (statA == null || statB == null) return 0;
+        return statB.modified.compareTo(statA.modified);
       });
       videos = found;
     } catch (_) {}
@@ -217,27 +247,10 @@ class _FileItem {
   final String ext;
   final int sizeBytes;
   final DateTime modified;
-  _FileItem(this.file)
+
+  _FileItem(this.file, this.sizeBytes, this.modified)
     : name = file.path.split('/').last,
-      ext = file.path.split('.').last.toLowerCase(),
-      sizeBytes = _safeSize(file),
-      modified = _safeModified(file);
-
-  static int _safeSize(File f) {
-    try {
-      return f.statSync().size;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  static DateTime _safeModified(File f) {
-    try {
-      return f.statSync().modified;
-    } catch (_) {
-      return DateTime.now();
-    }
-  }
+      ext = file.path.split('.').last.toLowerCase();
 
   String get sizeLabel {
     final kb = sizeBytes / 1024;
@@ -304,17 +317,20 @@ class MediaListViewModel extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> _scanDir(Directory dir, List<_FileItem> out,
-      {int depth = 0}) async {
-    final maxDepth =
-        Platform.isAndroid ? _kMaxDepthAndroid : _kMaxDepthDesktop;
+  Future<void> _scanDir(
+    Directory dir,
+    List<_FileItem> out, {
+    int depth = 0,
+  }) async {
+    final maxDepth = Platform.isAndroid ? _kMaxDepthAndroid : _kMaxDepthDesktop;
     if (depth > maxDepth) return;
     try {
       await for (final e in dir.list(recursive: false, followLinks: false)) {
         try {
           if (e is File &&
               _exts.contains(e.path.split('.').last.toLowerCase())) {
-            out.add(_FileItem(e));
+            final stat = await e.stat();
+            out.add(_FileItem(e, stat.size, stat.modified));
           } else if (e is Directory) {
             final name = e.path.split('/').last;
             if (!Platform.isAndroid && name.startsWith('.')) continue;

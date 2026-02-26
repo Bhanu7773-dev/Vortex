@@ -287,8 +287,8 @@ class AllFilesViewModel extends ChangeNotifier {
                 if (isDir) {
                   try {
                     if (!entity.path.split('/').last.startsWith('.')) {
-                      count = (entity as Directory)
-                          .listSync(recursive: false)
+                      count = await (entity as Directory)
+                          .list(recursive: false)
                           .length;
                     }
                   } catch (e) {

@@ -93,16 +93,21 @@ class _ReceiveJobCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = job.progress; // -1 if unknown
-    final isIndeterminate = !job.isComplete && progress < 0;
-    final progressValue = (job.isComplete || job.hasError)
-        ? (job.hasError ? null : 1.0)
-        : (progress >= 0 ? progress : null);
+    // While saving: show indeterminate bar so it doesn't look frozen at 100%
+    final isIndeterminate = job.isSaving || (!job.isComplete && !job.isSaving && progress < 0);
+    final progressValue = job.isSaving
+        ? null // indeterminate during flush
+        : (job.isComplete || job.hasError)
+            ? (job.hasError ? null : 1.0)
+            : (progress >= 0 ? progress : null);
 
     final Color barColor;
     if (job.hasError) {
       barColor = Colors.redAccent;
     } else if (job.isComplete) {
       barColor = Colors.greenAccent;
+    } else if (job.isSaving) {
+      barColor = Colors.orangeAccent;
     } else {
       barColor = Colors.blueAccent;
     }
@@ -141,7 +146,16 @@ class _ReceiveJobCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (!job.isComplete && !job.hasError) ...[
+              if (job.isSaving) ...[                // ── Saving state ────────────────────────────────────────────────
+                const Text(
+                  'Saving…',
+                  style: TextStyle(
+                    color: Colors.orangeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ] else if (!job.isComplete && !job.hasError) ...[
                 Text(
                   job.speedText,
                   style: const TextStyle(
@@ -193,9 +207,11 @@ class _ReceiveJobCard extends StatelessWidget {
           Row(
             children: [
               Text(
-                job.isComplete
-                    ? (job.hasError ? 'Error' : 'Received')
-                    : '${job.receivedText} / ${job.totalText}',
+              job.isSaving
+                  ? 'Writing to disk…'
+                  : job.isComplete
+                      ? (job.hasError ? 'Error' : 'Received')
+                      : '${job.receivedText} / ${job.totalText}',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.5),
                   fontSize: 12,

@@ -112,6 +112,7 @@ class ReceiveJob {
   bool isComplete;
   bool hasError;
   bool cancelled;
+  bool isSaving; // all bytes received, file is being flushed to disk
   String? savedPath;
   final DateTime startedAt;
 
@@ -125,6 +126,7 @@ class ReceiveJob {
        isComplete = false,
        hasError = false,
        cancelled = false,
+       isSaving = false,
        startedAt = DateTime.now();
 
   String get fileName => relativePath.split('/').last;
@@ -146,7 +148,7 @@ class ReceiveJob {
 // ─── TransferService ─────────────────────────────────────────────────────────
 
 class TransferService extends ChangeNotifier {
-  static const int _notifyThresholdBytes = 65536; // notify UI every 64 KB
+  static const int _notifyThresholdBytes = 512 * 1024; // notify UI every 512 KB
 
   bool _disposed = false;
 
@@ -247,7 +249,7 @@ class TransferService extends ChangeNotifier {
 
   /// High-speed raw TCP sender.  Opens a direct socket, writes a JSON
   /// header line, then streams the file in large chunks.
-  static const int _tcpChunkSize = 256 * 1024; // 256 KB chunks for throughput
+  static const int _tcpChunkSize = 1024 * 1024; // 1 MB chunks for throughput
 
   Future<void> _sendFileTcp(
     _TransferFile tf,
@@ -287,6 +289,10 @@ class TransferService extends ChangeNotifier {
           final chunk = await raf.read(_tcpChunkSize);
           if (chunk.isEmpty) break;
           socket.add(chunk);
+          // NO flush() here — let the OS TCP window manage backpressure.
+          // A per-chunk flush causes stop-and-wait behavior that tanks
+          // throughput over USB tethering (NAT adds 1–5 ms per round-trip).
+
           job.addSentBytes(chunk.length);
           pendingNotify += chunk.length;
           if (pendingNotify >= _notifyThresholdBytes) {
@@ -300,7 +306,7 @@ class TransferService extends ChangeNotifier {
 
       if (pipeError) return; // receiver already gone, skip flush/ACK
 
-      // Flush all data before waiting for ACK.
+      // Single flush after ALL chunks — drains Dart's outgoing buffer.
       await socket.flush();
 
       if (!job.cancelled) {
@@ -353,6 +359,14 @@ class TransferService extends ChangeNotifier {
     _safeNotify();
   }
 
+  /// Called once all bytes are received but before the file is flushed/closed.
+  void markReceiveSaving({required String id}) {
+    final job = receiveJobs.where((j) => j.id == id).firstOrNull;
+    if (job == null) return;
+    job.isSaving = true;
+    _safeNotify();
+  }
+
   /// Called when the file is fully received (or errored).
   void completeReceive({
     required String id,
@@ -362,6 +376,7 @@ class TransferService extends ChangeNotifier {
     final job = receiveJobs.where((j) => j.id == id).firstOrNull;
     if (job == null) return;
     job.isComplete = true;
+    job.isSaving = false;
     job.hasError = hasError;
     job.savedPath = savedPath;
     _safeNotify();

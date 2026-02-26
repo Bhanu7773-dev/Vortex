@@ -29,14 +29,8 @@ class ConnectionManager extends ChangeNotifier {
   // Maps deviceName -> IP address (populated when a WebSocket is established)
   final Map<String, String> _deviceIps = {};
 
-  // Pending connection being accepted on the server side
-  String? _currentPairCode;
-  String? _pendingDeviceName;
-  String? _pendingDeviceIp;
-
-  // Callback when another device wants to link with this one
-  // Provides (requesterDeviceName, generatedPairCode)
-  Function(String deviceName, String pairCode)? onIncomingLinkRequest;
+  // Token used for QR scanning/manual entry
+  late String qrToken;
 
   // Callback when WebSocket is successfully connected
   VoidCallback? onConnectionEstablished;
@@ -47,6 +41,8 @@ class ConnectionManager extends ChangeNotifier {
   // Progress callbacks for incoming receive
   Function(String id, String relativePath, int totalBytes)? onFileReceiveStart;
   Function(String id, int receivedBytes)? onFileReceiveProgress;
+  /// Called after all bytes are received but BEFORE flush/close — for "Saving…" UI.
+  Function(String id)? onFileReceiveSaving;
   Function(String id, String relativePath, String savedPath)?
   onFileReceiveComplete;
 
@@ -62,6 +58,8 @@ class ConnectionManager extends ChangeNotifier {
 
   ConnectionManager() {
     deviceId = _uuid.v4();
+    // Generate a new 6-digit token for this session
+    qrToken = (Random().nextInt(900000) + 100000).toString();
   }
 
   /// Starts the background HTTP server on the fixed Vortex port.
@@ -77,9 +75,7 @@ class ConnectionManager extends ChangeNotifier {
       debugPrint('Vortex Server listening on port: ${_httpServer!.port}');
 
       _httpServer!.listen((HttpRequest request) async {
-        if (request.uri.path == '/request_link' && request.method == 'POST') {
-          await _handleLinkRequest(request);
-        } else if (request.uri.path == '/ws') {
+        if (request.uri.path == '/ws') {
           await _handleWebSocketUpgrade(request);
         } else if (request.uri.path == '/upload' && request.method == 'POST') {
           await _handleUpload(request);
@@ -208,6 +204,7 @@ class ConnectionManager extends ChangeNotifier {
             sub.cancel();
             if (!dataCompleter.isCompleted) dataCompleter.complete();
           } else if (pendingNotify >= 65536) {
+            // 64KB trigger
             pendingNotify = 0;
             onFileReceiveProgress?.call(jobId, received);
           }
@@ -225,16 +222,18 @@ class ConnectionManager extends ChangeNotifier {
         await dataCompleter.future;
       }
 
+      // All bytes are in the sink — notify the UI to show "Saving…"
+      onFileReceiveSaving?.call(jobId);
+
       await sink.flush();
       await sink.close();
-      _activeReceiveSockets.remove(jobId);
 
-      if (!cancelled) {
-        socket.add([0x06]); // ACK
-        onFileReceiveComplete?.call(jobId, relativePath, file.path);
-      } else {
-        onFileReceiveComplete?.call(jobId, relativePath, file.path);
-      }
+      if (cancelled) return; // Receiver was cancelled midway
+
+      // Send single ACK byte to let sender know we saved exactly what they sent.
+      socket.add([0x06]);
+      onFileReceiveComplete?.call(jobId, relativePath, file.path);
+      _activeReceiveSockets.remove(jobId);
       await socket.close();
     } catch (e) {
       debugPrint('[TCP Receive] Error: $e');
@@ -255,56 +254,27 @@ class ConnectionManager extends ChangeNotifier {
     }
   }
 
-  /// Handles incoming requests from other devices trying to connect
-  Future<void> _handleLinkRequest(HttpRequest request) async {
-    try {
-      final content = await utf8.decoder.bind(request).join();
-      final data = jsonDecode(content);
-      final requesterName = data['deviceName'] ?? 'Unknown Device';
-
-      // Generate a random 6 digit code
-      _currentPairCode = (Random().nextInt(900000) + 100000).toString();
-      _pendingDeviceName = requesterName;
-      _pendingDeviceIp = request.connectionInfo?.remoteAddress.address;
-
-      // Notify the UI to show the code to the user
-      if (onIncomingLinkRequest != null) {
-        onIncomingLinkRequest!(requesterName, _currentPairCode!);
-      }
-
-      // Tell the requester that we are waiting for the code via WebSocket
-      request.response
-        ..statusCode = HttpStatus.ok
-        ..write(jsonEncode({'status': 'waiting_for_websocket'}))
-        ..close();
-    } catch (e) {
-      request.response
-        ..statusCode = HttpStatus.badRequest
-        ..close();
-    }
-  }
-
   /// Completes the connection if the correct pairing code is provided
   Future<void> _handleWebSocketUpgrade(HttpRequest request) async {
     final providedCode = request.uri.queryParameters['code'];
+    final requesterName =
+        request.uri.queryParameters['name'] ?? 'Unknown Device';
 
-    if (providedCode == null || providedCode != _currentPairCode) {
+    if (providedCode == null || providedCode != qrToken) {
+      debugPrint(
+        '[WebSocket] Refused connection. Expected: "$qrToken", Got: "$providedCode". Name: "$requesterName"',
+      );
       request.response
         ..statusCode = HttpStatus.forbidden
-        ..write('Invalid pair code')
+        ..write('Invalid token')
         ..close();
       return;
     }
 
     if (WebSocketTransformer.isUpgradeRequest(request)) {
       final socket = await WebSocketTransformer.upgrade(request);
-      final deviceName = _pendingDeviceName ?? 'Unknown Device';
-      final deviceIp =
-          _pendingDeviceIp ?? request.connectionInfo?.remoteAddress.address;
-      _setupChannel(deviceName, IOWebSocketChannel(socket), ip: deviceIp);
-      _currentPairCode = null; // Clear code after successful use
-      _pendingDeviceName = null;
-      _pendingDeviceIp = null;
+      final deviceIp = request.connectionInfo?.remoteAddress.address;
+      _setupChannel(requesterName, IOWebSocketChannel(socket), ip: deviceIp);
     } else {
       request.response
         ..statusCode = HttpStatus.badRequest
@@ -314,36 +284,23 @@ class ConnectionManager extends ChangeNotifier {
 
   // ============== CLIENT (INITIATOR) METHODS ==============
 
-  /// Called by Device A to trigger the pairing popup on Device B
-  Future<bool> sendLinkRequest(String ip, int port, String myDeviceName) async {
-    try {
-      final url = Uri.parse('http://$ip:$port/request_link');
-      final request = await HttpClient().postUrl(url);
-      request.headers.contentType = ContentType.json;
-      request.write(
-        jsonEncode({'deviceName': myDeviceName, 'deviceId': deviceId}),
-      );
-
-      final response = await request.close();
-      return response.statusCode == HttpStatus.ok;
-    } catch (e) {
-      debugPrint('Error sending link request: $e');
-      return false;
-    }
-  }
-
-  /// Called by Device A after the user enters the code they see on Device B
-  Future<bool> connectWebSocket(
+  /// Called by Device A to connect to Device B after scanning QR or entering IP
+  Future<bool> connectToDevice(
     String ip,
     int port,
-    String code,
-    String targetDeviceName,
-  ) async {
+    String token,
+    String myDeviceName, {
+    String? targetDeviceName,
+  }) async {
     try {
-      final wsUrl = Uri.parse('ws://$ip:$port/ws?code=$code');
-      final socket = await WebSocket.connect(wsUrl.toString());
+      final wsUrl = Uri.parse(
+        'ws://$ip:$port/ws?code=$token&name=${Uri.encodeComponent(myDeviceName)}',
+      );
+      final socket = await WebSocket.connect(
+        wsUrl.toString(),
+      ).timeout(const Duration(seconds: 15));
       final channel = IOWebSocketChannel(socket);
-      _setupChannel(targetDeviceName, channel, ip: ip);
+      _setupChannel(targetDeviceName ?? 'Device ($ip)', channel, ip: ip);
       return true;
     } catch (e) {
       debugPrint('Error connecting WebSocket: $e');

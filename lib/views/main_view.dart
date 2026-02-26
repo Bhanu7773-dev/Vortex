@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:vortex/services/connection_manager.dart';
-import 'package:vortex/services/discovery_service.dart';
 import 'package:vortex/services/transfer_service.dart';
-import 'package:vortex/views/link_flow/wifi_scan_view.dart';
-import 'package:vortex/views/link_flow/pair_code_view.dart';
+import 'package:vortex/views/link_flow/connect_device_view.dart';
+
 import 'package:vortex/views/recent_view.dart';
 import 'package:vortex/views/home_view.dart';
 
@@ -38,64 +35,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       final connectionManager = context.read<ConnectionManager>();
 
       // Start listening on the networking port continuously
-      connectionManager.startServer().then((_) async {
-        final port = connectionManager.serverPort;
-        if (port != null && mounted) {
-          String deviceName = 'Vortex Device';
-          try {
-            final deviceInfo = DeviceInfoPlugin();
-            if (Platform.isAndroid) {
-              final androidInfo = await deviceInfo.androidInfo;
-              deviceName = androidInfo.model;
-            } else if (Platform.isIOS) {
-              final iosInfo = await deviceInfo.iosInfo;
-              deviceName = iosInfo.name;
-            } else if (Platform.isLinux) {
-              final linuxInfo = await deviceInfo.linuxInfo;
-              deviceName = linuxInfo.prettyName;
-            } else if (Platform.isWindows) {
-              final windowsInfo = await deviceInfo.windowsInfo;
-              deviceName = windowsInfo.computerName;
-            } else if (Platform.isMacOS) {
-              final macInfo = await deviceInfo.macOsInfo;
-              deviceName = macInfo.computerName;
-            }
-          } catch (e) {
-            debugPrint('Failed to get device name: $e');
-          }
-
-          if (!mounted) return;
-          // Broadcast our presence continuously so others can find us
-          context.read<DiscoveryService>().registerService(
-            deviceName,
-            connectionManager.deviceId,
-            port,
-          );
-        }
-      });
-
-      connectionManager.onIncomingLinkRequest = (deviceName, pairCode) {
-        // On Linux desktop the UI can be completely idle (no animations, no
-        // repaints) so Flutter never schedules a new frame.  addPostFrameCallback
-        // is only drained at frame boundaries, so without an explicit
-        // ensureVisualUpdate() the callback would sit in the queue forever and
-        // Navigator.push would never execute — the pairing code screen would
-        // never appear.
-        SchedulerBinding.instance.ensureVisualUpdate();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PairCodeView(
-                isInitiator: false,
-                targetDeviceName: deviceName,
-                incomingCode: pairCode,
-              ),
-            ),
-          );
-        });
-      };
+      connectionManager.startServer();
 
       connectionManager.onFileReceived = (relativePath, savedPath) {
         SchedulerBinding.instance.ensureVisualUpdate();
@@ -143,20 +83,14 @@ class _MainWrapperViewState extends State<MainWrapperView> {
         transferService.updateReceive(id: id, receivedBytes: receivedBytes);
       };
 
+      connectionManager.onFileReceiveSaving = (id) {
+        transferService.markReceiveSaving(id: id);
+      };
+
       connectionManager.onFileReceiveComplete = (id, relativePath, savedPath) {
         transferService.completeReceive(id: id, savedPath: savedPath);
       };
     }); // end addPostFrameCallback
-
-    // On Linux/Windows/macOS Flutter stops scheduling frames when the UI is
-    // idle (no animations, no input). This prevents incoming network events
-    // (pairing codes, file-received snackbars) from ever painting. A cheap
-    // periodic tick keeps the engine alive without burning battery on mobile.
-    if (!Platform.isAndroid && !Platform.isIOS) {
-      _frameTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
-        if (mounted) SchedulerBinding.instance.ensureVisualUpdate();
-      });
-    }
   }
 
   @override
@@ -230,8 +164,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
           child: Column(
-            mainAxisSize:
-                MainAxisSize.min, // To make the bottom sheet wrap its content
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 40,
@@ -251,11 +184,8 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                 icon: Icons.wifi,
                 label: 'Via Wi-Fi',
                 onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const WifiScanView()),
-                  );
+                  Navigator.pop(context); // Close share options
+                  _showConnectDevice(context); // Open QR connect UI (Wi-Fi)
                 },
               ),
               _buildShareOption(
@@ -263,19 +193,41 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                 label: 'Via USB',
                 onTap: () {
                   Navigator.pop(context);
-                  // Add USB sharing logic
+                  _showConnectDevice(
+                    context,
+                    isUsbMode: true,
+                  ); // Open QR connect UI (USB)
                 },
               ),
               _buildShareOption(
-                icon: Icons.sync_alt, // Represents "both" or connection
+                icon: Icons.sync_alt,
                 label: 'Via Both',
                 onTap: () {
                   Navigator.pop(context);
-                  // Add Both sharing logic
+                  // Add Both sharing logic here in the future
                 },
               ),
               const SizedBox(height: 16),
             ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showConnectDevice(BuildContext context, {bool isUsbMode = false}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.85,
+            child: ConnectDeviceView(isUsbMode: isUsbMode),
           ),
         );
       },

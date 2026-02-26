@@ -1639,110 +1639,157 @@ class _DeviceRow extends StatelessWidget {
 
 // ─── Transfer progress dialog ─────────────────────────────────────────────────
 
-class _TransferProgressDialog extends StatelessWidget {
+class _TransferProgressDialog extends StatefulWidget {
   final TransferService transferService;
 
   const _TransferProgressDialog({required this.transferService});
 
   @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppTheme.cardGrey,
-      title: const Text(
-        'Sending Files',
-        style: TextStyle(color: Colors.white),
-      ),
-      content: ListenableBuilder(
-        listenable: transferService,
-        builder: (context, _) {
-          final job = transferService.activeJob;
+  State<_TransferProgressDialog> createState() =>
+      _TransferProgressDialogState();
+}
 
-          if (job == null) {
-            // All jobs done – auto-close
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (context.mounted && Navigator.canPop(context)) {
-                Navigator.pop(context);
-                transferService.dismissCompleted();
-              }
-            });
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle, color: Colors.greenAccent, size: 24),
-                  SizedBox(width: 12),
+class _TransferProgressDialogState extends State<_TransferProgressDialog> {
+  bool _done = false; // true once all jobs complete, shows OK screen
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      // Prevent back-swipe from dismissing mid-transfer
+      canPop: _done,
+      child: AlertDialog(
+        backgroundColor: AppTheme.cardGrey,
+        title: Text(
+          _done ? 'On Its Way!' : 'Transferring…',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: ListenableBuilder(
+          listenable: widget.transferService,
+          builder: (context, _) {
+            final job = widget.transferService.activeJob;
+
+            // ── Switch to done as soon as 100% bytes are sent ─────────────
+            // (ACK / disk-flush on receiver side happens in the background)
+            final allBytesSent = job == null || job.progress >= 1.0;
+            if (allBytesSent && !_done) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _done = true);
+                widget.transferService.dismissCompleted();
+              });
+            }
+
+            if (_done || job == null || job.progress >= 1.0) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.send_rounded,
+                      color: Colors.blueAccent,
+                      size: 28,
+                    ),
+                    SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'Your file has been sent.\nIt will be saved on the receiver\'s device shortly.',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // ── In progress ───────────────────────────────────────────────
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'To: ${job.deviceName}',
+                  style: const TextStyle(
+                    color: AppTheme.textGrey,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  job.statusText,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (!job.isComplete && !job.cancelled) ...[
+                  const SizedBox(height: 4),
                   Text(
-                    'Transfer complete!',
-                    style: TextStyle(color: Colors.white),
+                    job.speedText,
+                    style: const TextStyle(
+                      color: AppTheme.accentBlue,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
-              ),
-            );
-          }
-
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'To: ${job.deviceName}',
-                style: const TextStyle(
-                  color: AppTheme.textGrey,
-                  fontSize: 13,
+                const SizedBox(height: 16),
+                LinearProgressIndicator(
+                  value: job.progress.clamp(0.0, 1.0),
+                  backgroundColor: Colors.black,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppTheme.accentBlue,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                job.statusText,
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (!job.isComplete && !job.cancelled) ...[
-                const SizedBox(height: 4),
-                Text(
-                  job.speedText,
-                  style: const TextStyle(
-                    color: AppTheme.accentBlue,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${(job.progress * 100).toInt()}%',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
-              LinearProgressIndicator(
-                value: job.progress.clamp(0.0, 1.0),
-                backgroundColor: Colors.black,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  AppTheme.accentBlue,
-                ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${(job.progress * 100).toInt()}%',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            final job = transferService.activeJob;
-            if (job != null) transferService.cancelJob(job.id);
-            Navigator.pop(context);
+            );
           },
-          child: const Text(
-            'Cancel',
-            style: TextStyle(color: AppTheme.textGrey),
-          ),
         ),
-      ],
+        actions: [
+          ListenableBuilder(
+            listenable: widget.transferService,
+            builder: (context, _) {
+              if (_done || widget.transferService.activeJob == null ||
+                  (widget.transferService.activeJob?.progress ?? 0) >= 1.0) {
+                // ── Done: show OK ────────────────────────────────────────
+                return TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(
+                      color: AppTheme.accentBlue,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              }
+              // ── In-progress: show Cancel ─────────────────────────────
+              return TextButton(
+                onPressed: () {
+                  final job = widget.transferService.activeJob;
+                  if (job != null) widget.transferService.cancelJob(job.id);
+                  Navigator.pop(context);
+                },
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: AppTheme.textGrey),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }

@@ -85,11 +85,31 @@ class PhotosViewModel extends ChangeNotifier {
   }
 
   static const _kSkipDirs = {
-    'Android', '.cache', '.local', '.config', '.mozilla', '.npm',
-    '.pub-cache', '.dart', '.pub', '.gradle', '.android', '.flutter',
-    '.git', 'node_modules', 'proc', 'sys', 'dev', 'run', 'snap',
-    'AppData', r'$Recycle.Bin', 'Windows', 'Program Files',
-    'Program Files (x86)', 'ProgramData',
+    'Android',
+    '.cache',
+    '.local',
+    '.config',
+    '.mozilla',
+    '.npm',
+    '.pub-cache',
+    '.dart',
+    '.pub',
+    '.gradle',
+    '.android',
+    '.flutter',
+    '.git',
+    'node_modules',
+    'proc',
+    'sys',
+    'dev',
+    'run',
+    'snap',
+    'AppData',
+    r'$Recycle.Bin',
+    'Windows',
+    'Program Files',
+    'Program Files (x86)',
+    'ProgramData',
   };
 
   Future<void> _scanForAlbums(
@@ -181,12 +201,20 @@ class PhotoAlbumDetailViewModel extends ChangeNotifier {
     } catch (_) {}
 
     if (_disposed) return;
-    found.sort((a, b) {
+
+    final Map<String, FileStat> statCache = {};
+    for (var f in found) {
+      if (_disposed) return;
       try {
-        return b.statSync().modified.compareTo(a.statSync().modified);
-      } catch (_) {
-        return 0;
-      }
+        statCache[f.path] = await f.stat();
+      } catch (_) {}
+    }
+
+    found.sort((a, b) {
+      final statA = statCache[a.path];
+      final statB = statCache[b.path];
+      if (statA == null || statB == null) return 0;
+      return statB.modified.compareTo(statA.modified);
     });
     photos = found;
     isLoading = false;
