@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'transfer_service.dart';
+import 'multi_channel_transfer.dart';
 
 class ConnectionManager extends ChangeNotifier {
   // Fixed port so it can be opened in the OS firewall once and for all.
@@ -19,6 +20,13 @@ class ConnectionManager extends ChangeNotifier {
   HttpServer? _httpServer;
   ServerSocket? _tcpServer;
 
+  // ── Multi-channel (HybridFileXfer-style) state ──────────────────────────
+  MultiChannelReceiver? _activeMultiReceiver;
+
+  /// Cached network endpoints for this device (populated on server start).
+  List<ChannelEndpoint> _localEndpoints = [];
+  List<ChannelEndpoint> get localEndpoints => _localEndpoints;
+
   // Active incoming TCP sockets keyed by receive-job ID so they can be
   // cancelled from the UI.
   final Map<String, Socket> _activeReceiveSockets = {};
@@ -26,8 +34,30 @@ class ConnectionManager extends ChangeNotifier {
   // Maps deviceName -> WebSocketChannel
   final Map<String, WebSocketChannel> _activeChannels = {};
 
+  // Channels that were intentionally replaced (not disconnected) — their
+  // onDone callbacks should be ignored so the new channel isn't evicted.
+  final Set<WebSocketChannel> _replacedChannels = {};
+
   // Maps deviceName -> IP address (populated when a WebSocket is established)
   final Map<String, String> _deviceIps = {};
+
+  // Maps deviceName -> all known IPs (populated from Via Both QR with multiple IPs)
+  final Map<String, List<String>> _deviceAllIps = {};
+
+  // Maps deviceName -> connection mode: 'both' | 'wifi' | 'usb' | 'auto'
+  final Map<String, String> _deviceConnectionMode = {};
+
+  /// Returns the connection mode label for [deviceName].
+  String getDeviceMode(String deviceName) =>
+      _deviceConnectionMode[deviceName] ?? 'Wi-Fi';
+
+  /// Returns all known IPs for [deviceName], or just the primary IP if only one.
+  List<String> getDeviceAllIps(String deviceName) {
+    final all = _deviceAllIps[deviceName];
+    if (all != null && all.isNotEmpty) return all;
+    final primary = _deviceIps[deviceName];
+    return primary != null ? [primary] : [];
+  }
 
   // Token used for QR scanning/manual entry
   late String qrToken;
@@ -41,10 +71,13 @@ class ConnectionManager extends ChangeNotifier {
   // Progress callbacks for incoming receive
   Function(String id, String relativePath, int totalBytes)? onFileReceiveStart;
   Function(String id, int receivedBytes)? onFileReceiveProgress;
+
   /// Called after all bytes are received but BEFORE flush/close — for "Saving…" UI.
   Function(String id)? onFileReceiveSaving;
+  Function(String id, String error)? onFileReceiveError;
   Function(String id, String relativePath, String savedPath)?
   onFileReceiveComplete;
+  String? _activeMultiReceiveJobId;
 
   bool get isLinked => _activeChannels.isNotEmpty;
   List<String> get connectedDeviceNames => _activeChannels.keys.toList();
@@ -65,6 +98,12 @@ class ConnectionManager extends ChangeNotifier {
   /// Starts the background HTTP server on the fixed Vortex port.
   Future<void> startServer() async {
     if (_httpServer != null) return;
+
+    // Cache local network interfaces for multi-channel transfers
+    _localEndpoints = await enumerateInterfaces();
+    debugPrint(
+      '[Vortex] Local interfaces: ${_localEndpoints.map((e) => '${e.name}=${e.ip}').join(', ')}',
+    );
 
     try {
       _httpServer = await HttpServer.bind(
@@ -274,7 +313,25 @@ class ConnectionManager extends ChangeNotifier {
     if (WebSocketTransformer.isUpgradeRequest(request)) {
       final socket = await WebSocketTransformer.upgrade(request);
       final deviceIp = request.connectionInfo?.remoteAddress.address;
-      _setupChannel(requesterName, IOWebSocketChannel(socket), ip: deviceIp);
+      final mode = request.uri.queryParameters['mode'] ?? 'wifi';
+
+      // Reject duplicate connections for an already-active device.
+      // This happens when "Via Both" fires two parallel WebSocket connects
+      // from the scanning side — only the first should be accepted.
+      if (_activeChannels.containsKey(requesterName)) {
+        debugPrint(
+          '[WebSocket] Duplicate connection from $requesterName — closing extra socket.',
+        );
+        await socket.close(WebSocketStatus.normalClosure, 'duplicate');
+        return;
+      }
+
+      _setupChannel(
+        requesterName,
+        IOWebSocketChannel(socket),
+        ip: deviceIp,
+        mode: mode,
+      );
     } else {
       request.response
         ..statusCode = HttpStatus.badRequest
@@ -284,6 +341,10 @@ class ConnectionManager extends ChangeNotifier {
 
   // ============== CLIENT (INITIATOR) METHODS ==============
 
+  /// Tracks device names currently being connected — prevents duplicate
+  /// _setupChannel calls when "Via Both" fires two parallel connects.
+  final Set<String> _pendingConnects = {};
+
   /// Called by Device A to connect to Device B after scanning QR or entering IP
   Future<bool> connectToDevice(
     String ip,
@@ -291,20 +352,43 @@ class ConnectionManager extends ChangeNotifier {
     String token,
     String myDeviceName, {
     String? targetDeviceName,
+    List<String> extraIps = const [],
+    String connectionMode = 'wifi',
   }) async {
+    final name = targetDeviceName ?? 'Device ($ip)';
+
+    // Prevent a second parallel connect (e.g. Via Both with two IPs) from
+    // calling _setupChannel twice for the same device name, which would replace
+    // the first channel and then lose the device when the server closes the dupe.
+    if (_activeChannels.containsKey(name) || _pendingConnects.contains(name)) {
+      debugPrint(
+        '[connectToDevice] $name already connected/pending — skipping $ip',
+      );
+      return false;
+    }
+    _pendingConnects.add(name);
+
     try {
       final wsUrl = Uri.parse(
-        'ws://$ip:$port/ws?code=$token&name=${Uri.encodeComponent(myDeviceName)}',
+        'ws://$ip:$port/ws?code=$token'
+        '&name=${Uri.encodeComponent(myDeviceName)}'
+        '&mode=${Uri.encodeComponent(connectionMode)}',
       );
       final socket = await WebSocket.connect(
         wsUrl.toString(),
       ).timeout(const Duration(seconds: 15));
       final channel = IOWebSocketChannel(socket);
-      _setupChannel(targetDeviceName ?? 'Device ($ip)', channel, ip: ip);
+      _setupChannel(name, channel, ip: ip, mode: connectionMode);
+      // Store all known IPs for this device (enables multi-channel later)
+      if (extraIps.isNotEmpty) {
+        _deviceAllIps[name] = extraIps.toList();
+      }
       return true;
     } catch (e) {
       debugPrint('Error connecting WebSocket: $e');
       return false;
+    } finally {
+      _pendingConnects.remove(name);
     }
   }
 
@@ -312,10 +396,14 @@ class ConnectionManager extends ChangeNotifier {
 
   /// Schedules [notifyListeners] on the next frame so it never fires while
   /// the widget tree is locked (e.g. during layout or a build pass).
+  /// Also ensures a frame is scheduled so the callback actually fires even
+  /// when the screen is idle (no animations running).
   void _safeNotify() {
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!_disposed) notifyListeners();
-    });
+    SchedulerBinding.instance
+      ..ensureVisualUpdate()
+      ..addPostFrameCallback((_) {
+        if (!_disposed) notifyListeners();
+      });
   }
 
   bool _disposed = false;
@@ -326,6 +414,8 @@ class ConnectionManager extends ChangeNotifier {
     disconnectAll();
     _httpServer?.close(force: true);
     _tcpServer?.close();
+    _activeMultiReceiver?.cancel();
+    _activeMultiReceiver = null;
     for (final sock in _activeReceiveSockets.values) {
       try {
         sock.destroy();
@@ -339,38 +429,242 @@ class ConnectionManager extends ChangeNotifier {
     String deviceName,
     WebSocketChannel channel, {
     String? ip,
+    String mode = 'wifi',
   }) {
+    // Close the previous channel for this device if there was one,
+    // but mark it as replaced so its onDone doesn't remove the new entry.
     if (_activeChannels.containsKey(deviceName)) {
-      _activeChannels[deviceName]!.sink.close();
+      final old = _activeChannels[deviceName]!;
+      _replacedChannels.add(old);
+      old.sink.close();
     }
 
     _activeChannels[deviceName] = channel;
     if (ip != null) _deviceIps[deviceName] = ip;
+    _deviceConnectionMode[deviceName] = mode;
 
-    debugPrint('Vortex Devices Linked Successfully! ($deviceName, ip: $ip)');
+    debugPrint(
+      'Vortex Devices Linked Successfully! ($deviceName, ip: $ip, mode: $mode)',
+    );
 
     // Defer UI callbacks to the next frame — they may call Navigator.pop /
     // setState which crash if fired while the widget tree is locked.
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      onConnectionEstablished?.call();
-    });
+    // ensureVisualUpdate() guarantees a frame is scheduled even on idle screens.
+    SchedulerBinding.instance
+      ..ensureVisualUpdate()
+      ..addPostFrameCallback((_) {
+        onConnectionEstablished?.call();
+      });
     _safeNotify();
 
     channel.stream.listen(
       (message) {
         debugPrint('Received message from $deviceName: $message');
+        _handleControlMessage(deviceName, message);
       },
       onDone: () {
         debugPrint('WebSocket connection closed with $deviceName');
+        // Only remove if this specific channel instance is still the active one
+        // (not if it was replaced by a newer connection for the same device).
+        if (_replacedChannels.remove(channel)) return; // was replaced — ignore
         _activeChannels.remove(deviceName);
+        _deviceConnectionMode.remove(deviceName);
         _safeNotify();
       },
       onError: (error) {
         debugPrint('WebSocket error with $deviceName: $error');
+        if (_replacedChannels.remove(channel)) return; // was replaced — ignore
         _activeChannels.remove(deviceName);
+        _deviceConnectionMode.remove(deviceName);
         _safeNotify();
       },
     );
+  }
+
+  // ============== MULTI-CHANNEL TRANSFER NEGOTIATION ==============
+
+  /// Callback fired when a multi-channel transfer completes on receive side.
+  Function(String relativePath, String savedPath)? onMultiChannelFileReceived;
+
+  /// Called when a mc_request or mc_accept arrives over the WebSocket.
+  void _handleControlMessage(String deviceName, dynamic rawMessage) {
+    try {
+      final msg = jsonDecode(rawMessage as String) as Map<String, dynamic>;
+      final type = msg['type'] as String?;
+
+      switch (type) {
+        case 'mc_request':
+          _handleMultiChannelRequest(deviceName, msg);
+          break;
+        case 'mc_accept':
+          // Handled by the sender-side future (see TransferService).
+          if (!_pendingMcAccept.isCompleted) {
+            _pendingMcAccept.complete(msg);
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (_) {
+      // Not JSON or not a known control message — ignore.
+    }
+  }
+
+  // Completer that the sender-side awaits for mc_accept.
+  Completer<Map<String, dynamic>> _pendingMcAccept = Completer();
+
+  /// Called by TransferService on the SENDER side: sends a mc_request to the
+  /// receiver and waits for mc_accept.
+  Future<Map<String, dynamic>> requestMultiChannel({
+    required String deviceName,
+    required List<Map<String, dynamic>> files,
+  }) async {
+    // Refresh local endpoints before negotiation
+    _localEndpoints = await enumerateInterfaces();
+
+    // Reset the completer
+    _pendingMcAccept = Completer<Map<String, dynamic>>();
+
+    final request = McProtocol.buildRequest(
+      files: files,
+      senderChannels: _localEndpoints,
+    );
+    final channel = _activeChannels[deviceName];
+    if (channel == null) throw Exception('Device $deviceName not connected');
+
+    channel.sink.add(jsonEncode(request));
+
+    // Wait for the receiver to respond with mc_accept (timeout 15s).
+    final response = await _pendingMcAccept.future.timeout(
+      const Duration(seconds: 15),
+    );
+    return response;
+  }
+
+  /// RECEIVER side — handle the incoming mc_request.
+  Future<void> _handleMultiChannelRequest(
+    String deviceName,
+    Map<String, dynamic> msg,
+  ) async {
+    try {
+      // If a previous multi-channel receiver is still alive (stalled transfer,
+      // retry, or duplicate request), cancel it first so its server sockets do
+      // not compete for the same ports.
+      if (_activeMultiReceiver != null) {
+        debugPrint('[MultiRecv] Replacing previous active receiver');
+        if (_activeMultiReceiveJobId != null) {
+          onFileReceiveError?.call(
+            _activeMultiReceiveJobId!,
+            'Previous transfer was replaced by a new request',
+          );
+        }
+        _activeMultiReceiver!.cancel();
+        _activeMultiReceiver = null;
+        _activeMultiReceiveJobId = null;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+
+      final senderChannels = (msg['channels'] as List)
+          .map((e) => ChannelEndpoint.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final files = msg['files'] as List<dynamic>;
+
+      int totalBytes = 0;
+      for (final f in files) {
+        if (f['isDir'] != true) totalBytes += (f['size'] as int?) ?? 0;
+      }
+
+      // Unique receive job id per transfer attempt (important when retrying
+      // from the same device name, otherwise progress can map to stale jobs).
+      final jobId = 'mc_${deviceName}_${DateTime.now().millisecondsSinceEpoch}';
+      _activeMultiReceiveJobId = jobId;
+
+      // Determine how many channels to open — min of sender and receiver
+      // interface counts.
+      _localEndpoints = await enumerateInterfaces();
+      final channelCount = senderChannels.length < _localEndpoints.length
+          ? senderChannels.length
+          : _localEndpoints.length;
+
+      final saveDir = await TransferService.getReceiveDir();
+
+      // Create the receiver
+      _activeMultiReceiver = MultiChannelReceiver(
+        channelCount: channelCount,
+        saveBasePath: saveDir.path,
+        onProgress: (received, total, channels) {
+          onFileReceiveProgress?.call(jobId, received);
+        },
+        onComplete: () {
+          debugPrint('[MultiRecv] Transfer from $deviceName complete');
+          onFileReceiveComplete?.call(
+            jobId,
+            '${files.length} files',
+            saveDir.path,
+          );
+          _activeMultiReceiver = null;
+          _activeMultiReceiveJobId = null;
+        },
+        onError: (e) {
+          debugPrint('[MultiRecv] Error from $deviceName: $e');
+          onFileReceiveError?.call(jobId, e);
+          _activeMultiReceiver = null;
+          _activeMultiReceiveJobId = null;
+        },
+        onFileReceived: (relativePath, savedPath) {
+          onFileReceived?.call(relativePath, savedPath);
+        },
+      );
+
+      // Start receiving in the background (binds server sockets).
+      _activeMultiReceiver!.start(totalBytes: totalBytes).catchError((e) {
+        debugPrint('[MultiRecv] Fatal: $e');
+        onFileReceiveError?.call(jobId, e.toString());
+        _activeMultiReceiver = null;
+        _activeMultiReceiveJobId = null;
+      });
+
+      // Wait until all server sockets are bound before telling the sender
+      // to connect.  Without this, the sender receives mc_accept and tries
+      // Socket.connect() before the ports are open → connection refused or
+      // data goes to a stale socket.
+      await _activeMultiReceiver!.readyFuture.timeout(
+        const Duration(seconds: 10),
+      );
+
+      // Send back mc_accept with endpoints subnet-matched to sender channels.
+      // For each sender channel IP, find the local interface on the same /24
+      // so that traffic actually flows over the intended NIC (WiFi vs USB).
+      final matchedEndpoints = <ChannelEndpoint>[];
+      for (int ci = 0; ci < channelCount; ci++) {
+        final senderIp = senderChannels[ci].ip;
+        final match = _localEndpoints.firstWhere(
+          (local) => _sameSubnet(local.ip, senderIp),
+          orElse: () => _localEndpoints.first,
+        );
+        matchedEndpoints.add(match);
+      }
+      final accept = McProtocol.buildAccept(receiverChannels: matchedEndpoints);
+      final channel = _activeChannels[deviceName];
+      channel?.sink.add(jsonEncode(accept));
+
+      // Notify UI that a multi-channel receive is starting
+      onFileReceiveStart?.call(
+        jobId,
+        '${files.length} files (multi-channel)',
+        totalBytes,
+      );
+    } catch (e) {
+      debugPrint('[MultiRecv] Failed to set up multi-channel: $e');
+    }
+  }
+
+  /// Returns true if [ip1] and [ip2] are on the same /24 subnet.
+  static bool _sameSubnet(String ip1, String ip2) {
+    final p1 = ip1.split('.');
+    final p2 = ip2.split('.');
+    if (p1.length != 4 || p2.length != 4) return false;
+    return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2];
   }
 
   // ============== FILE RECEIVE ==============
@@ -461,16 +755,25 @@ class ConnectionManager extends ChangeNotifier {
   Future<void> disconnectDevice(String deviceName) async {
     final channel = _activeChannels.remove(deviceName);
     _deviceIps.remove(deviceName);
-    await channel?.sink.close();
+    _deviceAllIps.remove(deviceName);
+    _deviceConnectionMode.remove(deviceName);
+    if (channel != null) {
+      _replacedChannels.add(channel); // prevent onDone re-notifying
+      await channel.sink.close();
+    }
     _safeNotify();
   }
 
   Future<void> disconnectAll() async {
     for (var channel in _activeChannels.values) {
+      _replacedChannels.add(channel); // prevent onDone from double-removing
       await channel.sink.close();
     }
     _activeChannels.clear();
     _deviceIps.clear();
+    _deviceAllIps.clear();
+    _deviceConnectionMode.clear();
+    _replacedChannels.clear();
     _safeNotify();
   }
 }

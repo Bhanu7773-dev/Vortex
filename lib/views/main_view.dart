@@ -37,6 +37,35 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       // Start listening on the networking port continuously
       connectionManager.startServer();
 
+      // ── Show snackbar on this device when any peer connects ──────────────
+      connectionManager.onConnectionEstablished = () {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final devices = context.read<ConnectionManager>().connectedDeviceNames;
+          final name = devices.isNotEmpty ? devices.last : 'A device';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF1E3A2F),
+              content: Row(
+                children: [
+                  const Icon(Icons.link, color: Colors.greenAccent, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '$name connected',
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        });
+      };
+
       connectionManager.onFileReceived = (relativePath, savedPath) {
         SchedulerBinding.instance.ensureVisualUpdate();
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -85,6 +114,14 @@ class _MainWrapperViewState extends State<MainWrapperView> {
 
       connectionManager.onFileReceiveSaving = (id) {
         transferService.markReceiveSaving(id: id);
+      };
+
+      connectionManager.onFileReceiveError = (id, error) {
+        transferService.completeReceive(
+          id: id,
+          savedPath: '',
+          hasError: true,
+        );
       };
 
       connectionManager.onFileReceiveComplete = (id, relativePath, savedPath) {
@@ -204,7 +241,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                 label: 'Via Both',
                 onTap: () {
                   Navigator.pop(context);
-                  // Add Both sharing logic here in the future
+                  _showConnectDevice(context, isBothMode: true);
                 },
               ),
               const SizedBox(height: 16),
@@ -215,7 +252,8 @@ class _MainWrapperViewState extends State<MainWrapperView> {
     );
   }
 
-  void _showConnectDevice(BuildContext context, {bool isUsbMode = false}) {
+  void _showConnectDevice(BuildContext context,
+      {bool isUsbMode = false, bool isBothMode = false}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -227,7 +265,10 @@ class _MainWrapperViewState extends State<MainWrapperView> {
           ),
           child: SizedBox(
             height: MediaQuery.of(context).size.height * 0.85,
-            child: ConnectDeviceView(isUsbMode: isUsbMode),
+            child: ConnectDeviceView(
+              isUsbMode: isUsbMode,
+              isBothMode: isBothMode,
+            ),
           ),
         );
       },

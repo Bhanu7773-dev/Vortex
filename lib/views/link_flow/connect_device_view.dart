@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,7 +13,12 @@ import '../../services/connection_manager.dart';
 
 class ConnectDeviceView extends StatefulWidget {
   final bool isUsbMode;
-  const ConnectDeviceView({Key? key, this.isUsbMode = false}) : super(key: key);
+  final bool isBothMode;
+  const ConnectDeviceView({
+    Key? key,
+    this.isUsbMode = false,
+    this.isBothMode = false,
+  }) : super(key: key);
 
   @override
   State<ConnectDeviceView> createState() => _ConnectDeviceViewState();
@@ -26,6 +32,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
 
   String _myDeviceName = 'Unknown Device';
   String _myIp = '127.0.0.1';
+  List<String> _myAllIps = []; // populated in isBothMode
   bool _isConnecting = false;
 
   @override
@@ -36,6 +43,30 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
       vsync: this,
     );
     _fetchNetworkInfo();
+  }
+
+  /// Collects ALL usable IPv4 interfaces (for Both mode).
+  static Future<List<String>> _getAllIps() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLinkLocal: false,
+      );
+      final ips = <String>[];
+      for (final iface in interfaces) {
+        final n = iface.name.toLowerCase();
+        if (n.startsWith('docker') || n.startsWith('veth') ||
+            n.startsWith('virbr') || n.startsWith('br-') ||
+            n.startsWith('vmnet') || n.startsWith('tun') ||
+            n.startsWith('tap')) continue;
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback) ips.add(addr.address);
+        }
+      }
+      return ips;
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<void> _fetchNetworkInfo() async {
@@ -58,6 +89,12 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
         _myDeviceName = deviceName;
         _myIp = best;
       });
+    }
+
+    // In Both mode also grab every interface IP
+    if (widget.isBothMode) {
+      final all = await _getAllIps();
+      if (mounted) setState(() => _myAllIps = all);
     }
   }
 
@@ -134,22 +171,94 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     final String? rawValue = barcodes.first.rawValue;
     if (rawValue == null || rawValue.isEmpty) return;
 
+    Map<String, dynamic> data;
     try {
-      final data = jsonDecode(rawValue);
-      if (data['ip'] == null || data['token'] == null || data['port'] == null) {
-        return; // Not a valid Vortex QR
-      }
+      data = jsonDecode(rawValue) as Map<String, dynamic>;
+    } catch (e) {
+      debugPrint('[QR] Failed to decode JSON: $e');
+      return;
+    }
 
-      setState(() => _isConnecting = true);
+    final ip = data['ip'];
+    final token = data['token'];
+    final port = data['port'];
+    if (ip == null || token == null || port == null) {
+      debugPrint('[QR] Missing ip/token/port in QR data: $data');
+      return;
+    }
 
-      _connectToTarget(
-        ip: data['ip'],
-        port: data['port'],
-        token: data['token'],
-        targetName: data['name'] ?? 'Device',
+    setState(() => _isConnecting = true);
+
+    // Multi-IP QR (Via Both mode on sender side)
+    final List<String> ips = data['ips'] != null
+        ? List<String>.from(data['ips'] as List)
+        : [ip.toString()];
+
+    _connectToFirstReachable(
+      ips: ips,
+      port: port is int ? port : int.parse(port.toString()),
+      token: token.toString(),
+      targetName: data['name']?.toString() ?? 'Device',
+      extraIps: ips,
+      connectionMode: widget.isBothMode ? 'both' : widget.isUsbMode ? 'usb' : 'wifi',
+    );
+  }
+
+  /// Try IPs in parallel; use whichever succeeds first, ignore the rest.
+  Future<void> _connectToFirstReachable({
+    required List<String> ips,
+    required int port,
+    required String token,
+    required String targetName,
+    List<String> extraIps = const [],
+    String connectionMode = 'wifi',
+  }) async {
+    if (ips.isEmpty) {
+      if (mounted) setState(() => _isConnecting = false);
+      return;
+    }
+
+    final cm = context.read<ConnectionManager>();
+    final winner = Completer<bool>();
+
+    // Race all IPs — first success wins, others are ignored.
+    for (final ip in ips) {
+      cm
+          .connectToDevice(
+            ip, port, token, _myDeviceName,
+            targetDeviceName: targetName,
+            extraIps: extraIps,
+            connectionMode: connectionMode,
+          )
+          .then((success) {
+            if (!winner.isCompleted) {
+              if (success) winner.complete(true);
+            }
+          })
+          .catchError((e) {
+            debugPrint('[Connect] $ip failed: $e');
+          });
+    }
+
+    // Also complete with false after timeout if nothing worked.
+    Future.delayed(const Duration(seconds: 16)).then((_) {
+      if (!winner.isCompleted) winner.complete(false);
+    });
+
+    final connected = await winner.future;
+
+    if (!mounted) return;
+    if (connected) {
+      Navigator.pop(context);
+    } else {
+      setState(() => _isConnecting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+              'Failed to connect to $targetName. Check the IP and token.'),
+        ),
       );
-    } catch (_) {
-      // Invalid JSON
     }
   }
 
@@ -158,30 +267,14 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     required int port,
     required String token,
     required String targetName,
-  }) async {
-    final cm = context.read<ConnectionManager>();
-
-    final success = await cm.connectToDevice(
-      ip,
-      port,
-      token,
-      _myDeviceName,
-      targetDeviceName: targetName,
+  }) {
+    _connectToFirstReachable(
+      ips: [ip],
+      port: port,
+      token: token,
+      targetName: targetName,
+      connectionMode: widget.isBothMode ? 'both' : widget.isUsbMode ? 'usb' : 'wifi',
     );
-
-    if (mounted) {
-      if (success) {
-        Navigator.pop(context); // Close sheet
-      } else {
-        setState(() => _isConnecting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.redAccent,
-            content: Text('Failed to connect to $targetName at $ip'),
-          ),
-        );
-      }
-    }
   }
 
   @override
@@ -202,7 +295,14 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
       'port': ConnectionManager.serverFixedPort,
       'token': cm.qrToken,
       'name': _myDeviceName,
+      if (widget.isBothMode && _myAllIps.isNotEmpty) 'ips': _myAllIps,
     });
+
+    final modeLabel = widget.isBothMode
+        ? 'Connect via Wi-Fi + USB'
+        : widget.isUsbMode
+            ? 'Connect via USB'
+            : 'Connect Device';
 
     return Container(
       decoration: const BoxDecoration(
@@ -222,7 +322,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           ),
           const SizedBox(height: 16),
           Text(
-            widget.isUsbMode ? 'Connect via USB' : 'Connect Device',
+            modeLabel,
             style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -230,7 +330,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
             ),
           ),
           const SizedBox(height: 16),
-          if (widget.isUsbMode && Platform.isAndroid)
+          if ((widget.isUsbMode || widget.isBothMode) && Platform.isAndroid)
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 24.0,
@@ -270,7 +370,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                 },
               ),
             ),
-          if (widget.isUsbMode)
+          if (widget.isUsbMode || widget.isBothMode)
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
               child: TextButton.icon(
@@ -385,10 +485,22 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            'IP: $_myIp',
-            style: const TextStyle(fontSize: 14, color: Colors.white54),
-          ),
+          // In Both mode show every interface IP
+          if (widget.isBothMode && _myAllIps.isNotEmpty) ...
+            _myAllIps.map(
+              (ip) => Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  ip,
+                  style: const TextStyle(fontSize: 13, color: Colors.white54),
+                ),
+              ),
+            )
+          else
+            Text(
+              'IP: $_myIp',
+              style: const TextStyle(fontSize: 14, color: Colors.white54),
+            ),
           const SizedBox(height: 6),
           Text(
             'Token: $currentToken',

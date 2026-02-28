@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:vortex/services/connection_manager.dart';
+import 'package:vortex/services/multi_channel_transfer.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -85,6 +86,19 @@ class TransferJob {
   String get speedText => _fmtSpeed(_speed.bytesPerSec);
   String get sentText => _fmtBytes(sentBytes);
   String get totalText => _fmtBytes(totalBytes);
+
+  /// Per-channel statistics (populated during multi-channel transfers).
+  List<ChannelStats> perChannelStats = [];
+
+  /// Whether this job is using multi-channel mode.
+  bool isMultiChannel = false;
+
+  String get channelSpeedSummary {
+    if (perChannelStats.isEmpty) return '';
+    return perChannelStats
+        .map((c) => '${c.name}: ${_fmtSpeed(c.sendSpeed)}')
+        .join(' | ');
+  }
 
   void addSentBytes(int bytes) {
     sentBytes += bytes;
@@ -190,11 +204,14 @@ class TransferService extends ChangeNotifier {
   // ------------------------------------------------------------------
 
   /// Entry point: send [selectedPaths] (files and/or folders) to one device.
+  /// Automatically uses multi-channel mode when the ConnectionManager has
+  /// multiple usable network interfaces.
   Future<void> sendToDevice({
     required List<String> selectedPaths,
     required String deviceName,
     required String deviceIp,
     required int devicePort,
+    ConnectionManager? connectionManager,
   }) async {
     final files = await _expandPaths(selectedPaths);
 
@@ -214,6 +231,26 @@ class TransferService extends ChangeNotifier {
     jobs.add(job);
     _safeNotify();
 
+    // ── Try multi-channel first ───────────────────────────────────────────
+    if (connectionManager != null) {
+      try {
+        final mcResult = await _trySendMultiChannel(
+          files: files,
+          job: job,
+          deviceName: deviceName,
+          connectionManager: connectionManager,
+        );
+        if (mcResult) {
+          job.isComplete = true;
+          _safeNotify();
+          return;
+        }
+      } catch (e) {
+        debugPrint('[Transfer] Multi-channel failed, falling back: $e');
+      }
+    }
+
+    // ── Fallback: single-channel TCP ──────────────────────────────────────
     for (int i = 0; i < files.length; i++) {
       final tf = files[i];
       if (job.cancelled) break;
@@ -230,10 +267,81 @@ class TransferService extends ChangeNotifier {
     _safeNotify();
   }
 
+  /// Attempt multi-channel transfer. Returns true if successful.
+  Future<bool> _trySendMultiChannel({
+    required List<_TransferFile> files,
+    required TransferJob job,
+    required String deviceName,
+    required ConnectionManager connectionManager,
+  }) async {
+    // Build the file manifest for negotiation
+    final fileManifest = <Map<String, dynamic>>[];
+    for (final tf in files) {
+      final stat = await tf.file.stat();
+      fileManifest.add({
+        'path': tf.relativePath,
+        'size': stat.type == FileSystemEntityType.directory ? 0 : stat.size,
+        'isDir': stat.type == FileSystemEntityType.directory,
+      });
+    }
+
+    // Request multi-channel from the receiver via WebSocket
+    final response = await connectionManager.requestMultiChannel(
+      deviceName: deviceName,
+      files: fileManifest,
+    );
+
+    final receiverChannels = (response['channels'] as List)
+        .map((e) => ChannelEndpoint.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    if (receiverChannels.isEmpty) return false;
+
+    // Map receiver IPs to our target list
+    final targetIps = receiverChannels.map((e) => e.ip).toList();
+
+    debugPrint(
+        '[Transfer] Multi-channel: ${targetIps.length} channels to $targetIps');
+
+    job.isMultiChannel = true;
+    job.perChannelStats = [];
+    _safeNotify();
+
+    final completer = Completer<bool>();
+
+    final sender = MultiChannelSender(
+      targetIps: targetIps,
+      files: files
+          .map((f) => McTransferFile(file: f.file, relativePath: f.relativePath))
+          .toList(),
+      totalBytes: job.totalBytes,
+      onProgress: (sent, total, channels) {
+        job.sentBytes = sent;
+        job._speed.record(sent);
+        job.perChannelStats = channels;
+        _safeNotify();
+      },
+      onComplete: () {
+        job.completedFiles = job.totalFiles;
+        if (!completer.isCompleted) completer.complete(true);
+      },
+      onError: (e) {
+        debugPrint('[MultiSend] Error: $e');
+        if (!completer.isCompleted) completer.complete(false);
+      },
+    );
+
+    // Start the multi-channel sender
+    sender.start();
+
+    return completer.future;
+  }
+
   /// Send to multiple devices in parallel.
   Future<void> sendToDevices({
     required List<String> selectedPaths,
     required List<({String name, String ip, int port})> targets,
+    ConnectionManager? connectionManager,
   }) async {
     await Future.wait(
       targets.map(
@@ -242,6 +350,7 @@ class TransferService extends ChangeNotifier {
           deviceName: t.name,
           deviceIp: t.ip,
           devicePort: t.port,
+          connectionManager: connectionManager,
         ),
       ),
     );
@@ -340,12 +449,22 @@ class TransferService extends ChangeNotifier {
     required String relativePath,
     required int totalBytes,
   }) {
+    // Remove stale unfinished jobs for the same file label so retry sessions
+    // don't leave old 0%-progress cards that shadow current progress.
+    receiveJobs.removeWhere(
+      (j) =>
+          !j.isComplete &&
+          !j.hasError &&
+          j.relativePath == relativePath,
+    );
+
     final job = ReceiveJob(
       id: id,
       relativePath: relativePath,
       totalBytes: totalBytes,
     );
-    receiveJobs.add(job);
+    // Newest first improves visibility of active retried transfers.
+    receiveJobs.insert(0, job);
     _safeNotify();
     return job;
   }

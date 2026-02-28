@@ -783,6 +783,7 @@ class _AllFilesViewState extends State<AllFilesView> {
       isScrollControlled: true,
       builder: (_) => _ShareSheetContent(
         transferService: transferService,
+        connectionManager: connectionManager,
         selectedPaths: selectedPaths,
         connectedDeviceNames: deviceNames,
         deviceIps: ipMap,
@@ -1290,6 +1291,7 @@ class PasteProgressDialog extends StatelessWidget {
 
 class _ShareSheetContent extends StatefulWidget {
   final TransferService transferService;
+  final ConnectionManager connectionManager;
   final List<String> selectedPaths;
   final List<String> connectedDeviceNames;
   final Map<String, String?> deviceIps; // name → ip (null = unknown)
@@ -1297,6 +1299,7 @@ class _ShareSheetContent extends StatefulWidget {
 
   const _ShareSheetContent({
     required this.transferService,
+    required this.connectionManager,
     required this.selectedPaths,
     required this.connectedDeviceNames,
     required this.deviceIps,
@@ -1552,6 +1555,7 @@ class _ShareSheetContentState extends State<_ShareSheetContent> {
     await widget.transferService.sendToDevices(
       selectedPaths: widget.selectedPaths,
       targets: targets,
+      connectionManager: widget.connectionManager,
     );
   }
 }
@@ -1638,6 +1642,12 @@ class _DeviceRow extends StatelessWidget {
 }
 
 // ─── Transfer progress dialog ─────────────────────────────────────────────────
+
+String _fmtChannelSpeed(double bps) {
+  if (bps >= 1024 * 1024) return '${(bps / (1024 * 1024)).toStringAsFixed(1)} MB/s';
+  if (bps >= 1024) return '${(bps / 1024).toStringAsFixed(1)} KB/s';
+  return '${bps.toStringAsFixed(0)} B/s';
+}
 
 class _TransferProgressDialog extends StatefulWidget {
   final TransferService transferService;
@@ -1734,6 +1744,32 @@ class _TransferProgressDialogState extends State<_TransferProgressDialog> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  // Per-channel speed breakdown for multi-channel transfers
+                  if (job.isMultiChannel && job.perChannelStats.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    ...job.perChannelStats.map(
+                      (ch) => Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.cable_rounded,
+                              size: 12,
+                              color: Colors.white38,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${ch.name}: ${_fmtChannelSpeed(ch.sendSpeed)}',
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 16),
                 LinearProgressIndicator(
