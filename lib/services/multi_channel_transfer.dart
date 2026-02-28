@@ -13,6 +13,7 @@
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:isolate';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -324,25 +325,235 @@ class ChannelStats {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// MULTI-CHANNEL SENDER
+// MULTI-CHANNEL SENDER (Isolate-based)
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// Callback for aggregate progress.
 typedef MultiSendProgressCallback =
     void Function(int sentBytes, int totalBytes, List<ChannelStats> channels);
 
-/// Sends files over multiple TCP sockets (one per network interface) to a
-/// remote Vortex device.
-///
-/// Usage:
-/// ```dart
-/// final sender = MultiChannelSender(
-///   targetIps: ['192.168.1.42', '192.168.50.1'],  // receiver IPs per iface
-///   files: expandedFiles,
-///   onProgress: (sent, total, ch) { ... },
-/// );
-/// await sender.start();
-/// ```
+// ── Serialization helpers ────────────────────────────────────────────────────
+
+/// Builds the wire-format header for a file block (without the data bytes).
+Uint8List _buildBlockHeader(FileBlock block) {
+  final bb = BytesBuilder(copy: false);
+  _writeUint16(bb, block.isFile ? TransferIds.file : TransferIds.folder);
+  _writeInt32(bb, block.fileIndex);
+  _writeUTF(bb, block.path);
+  _writeInt64(bb, block.lastModified);
+  if (block.isFile) {
+    _writeInt64(bb, block.totalSize);
+    _writeInt32(bb, block.blockIndex);
+    _writeInt32(bb, block.length);
+  }
+  return bb.toBytes();
+}
+
+Uint8List _buildEofSentinel() {
+  final bb = BytesBuilder(copy: false);
+  _writeUint16(bb, TransferIds.eof);
+  return bb.toBytes();
+}
+
+// ── Sender isolate ───────────────────────────────────────────────────────────
+
+/// Each sender isolate reads its OWN blocks from disk and sends them over TCP.
+/// No 1 MB data copies cross between isolates — only tiny metadata messages.
+void _senderIsolateEntry(List<dynamic> args) {
+  final mainPort = args[0] as SendPort;
+  final ip = args[1] as String;
+  final port = args[2] as int;
+  final chIndex = args[3] as int;
+  final channelCount = args[4] as int;
+  final fileManifest = args[5] as List<Map<String, dynamic>>;
+
+  _runSenderIsolate(mainPort, ip, port, chIndex, channelCount, fileManifest);
+}
+
+Future<void> _runSenderIsolate(
+  SendPort mainPort,
+  String ip,
+  int port,
+  int chIndex,
+  int channelCount,
+  List<Map<String, dynamic>> fileManifest,
+) async {
+  Socket? socket;
+  try {
+    socket = await Socket.connect(
+      ip,
+      port,
+      timeout: const Duration(seconds: 15),
+    );
+    socket.setOption(SocketOption.tcpNoDelay, true);
+    mainPort.send('connected');
+
+    bool pipeError = false;
+    socket.done.catchError((e) {
+      pipeError = true;
+    });
+
+    int sentBytes = 0;
+    int sentBlocks = 0;
+    var lastLogAt = DateTime.now();
+    int lastLogBytes = 0;
+    int globalBlockIndex = 0;
+
+    // Adaptive block size: start at kBlockSize (1MB), scale up after warmup
+    // based on measured throughput. Bigger blocks = less per-block overhead
+    // at high speeds (USB 3.x phones doing 200+ MB/s).
+    int adaptiveBlock = kBlockSize; // starts at 1MB
+
+    for (int fi = 0; fi < fileManifest.length && !pipeError; fi++) {
+      final entry = fileManifest[fi];
+      final filePath = entry['filePath'] as String;
+      final relativePath = entry['relativePath'] as String;
+      final isDir = entry['isDir'] as bool;
+      final fileSize = entry['size'] as int;
+      final lastModified = entry['lastModified'] as int;
+
+      if (isDir) {
+        // Directory entries are round-robin assigned
+        if (globalBlockIndex % channelCount == chIndex) {
+          final header = _buildBlockHeader(
+            FileBlock(
+              isFile: false,
+              fileIndex: fi,
+              path: relativePath,
+              lastModified: lastModified,
+            ),
+          );
+          socket.add(header);
+        }
+        globalBlockIndex++;
+        continue;
+      }
+
+      if (fileSize == 0) {
+        if (globalBlockIndex % channelCount == chIndex) {
+          final header = _buildBlockHeader(
+            FileBlock(
+              isFile: true,
+              fileIndex: fi,
+              path: relativePath,
+              lastModified: lastModified,
+              totalSize: 0,
+              blockIndex: 0,
+              data: Uint8List(0),
+            ),
+          );
+          socket.add(header);
+        }
+        globalBlockIndex++;
+        continue;
+      }
+
+      // Round-robin block assignment: read every channelCount-th block.
+      // This keeps receiver write positions 1MB apart (not ~967MB apart like
+      // stripe), which is far better for Android's write scheduler.
+      final file = File(filePath);
+      final raf = await file.open(mode: FileMode.read);
+      try {
+        int remaining = fileSize;
+        int blkIdx = 0;
+        while (remaining > 0 && !pipeError) {
+          final chunkSize = remaining < adaptiveBlock
+              ? remaining
+              : adaptiveBlock;
+
+          if (globalBlockIndex % channelCount == chIndex) {
+            // Our block — read and send it
+            final data = await raf.read(chunkSize);
+            final header = _buildBlockHeader(
+              FileBlock(
+                isFile: true,
+                fileIndex: fi,
+                path: relativePath,
+                lastModified: lastModified,
+                totalSize: fileSize,
+                blockIndex: blkIdx,
+                data: data,
+              ),
+            );
+            socket.add(header);
+            socket.add(data);
+            sentBytes += chunkSize;
+            sentBlocks++;
+
+            if (sentBlocks % 4 == 0) {
+              await socket.flush();
+              mainPort.send(sentBytes);
+            }
+
+            // After 32-block warmup, scale up block size based on speed.
+            if (sentBlocks == 32) {
+              final elapsedMs = DateTime.now()
+                  .difference(lastLogAt)
+                  .inMilliseconds;
+              final mbps = elapsedMs > 0
+                  ? (sentBytes / (elapsedMs / 1000.0) / (1024 * 1024))
+                  : 0.0;
+              if (mbps > 200) {
+                adaptiveBlock = 4 * 1024 * 1024; // 4MB for USB 3.x
+              } else if (mbps > 80) {
+                adaptiveBlock = 2 * 1024 * 1024; // 2MB for mid-range
+              }
+              mainPort.send(
+                'log:[MultiSend ch$chIndex] warmup done: ${mbps.toStringAsFixed(0)}MB/s → blockSize=${adaptiveBlock ~/ 1024}KB',
+              );
+            }
+
+            // Log speed every second
+            final now = DateTime.now();
+            if (now.difference(lastLogAt).inMilliseconds >= 1000) {
+              final elapsed = now.difference(lastLogAt).inMilliseconds / 1000.0;
+              final speed =
+                  ((sentBytes - lastLogBytes) / elapsed / (1024 * 1024))
+                      .toStringAsFixed(1);
+              mainPort.send(
+                'log:[MultiSend ch$chIndex] blocks=$sentBlocks sent=$sentBytes speed=${speed}MB/s blk=${adaptiveBlock ~/ 1024}KB',
+              );
+              lastLogAt = now;
+              lastLogBytes = sentBytes;
+            }
+          } else {
+            // Not our block — skip ahead without reading the data
+            await raf.setPosition(await raf.position() + chunkSize);
+          }
+
+          remaining -= chunkSize;
+          blkIdx++;
+          globalBlockIndex++;
+        }
+      } finally {
+        await raf.close();
+      }
+    }
+
+    // Send EOF
+    socket.add(_buildEofSentinel());
+    if (!pipeError) {
+      await socket.flush();
+    }
+    mainPort.send(sentBytes); // final progress
+    mainPort.send('done');
+  } catch (e) {
+    mainPort.send('error:$e');
+  } finally {
+    try {
+      await socket?.close();
+    } catch (_) {
+      try {
+        socket?.destroy();
+      } catch (_) {}
+    }
+  }
+}
+
+// ── MultiChannelSender ───────────────────────────────────────────────────────
+
+/// Sends files over multiple TCP sockets using Dart Isolates — one isolate
+/// per network interface — each doing its own file I/O for zero-copy transfer.
 class MultiChannelSender {
   final List<String> targetIps;
   final List<McTransferFile> files;
@@ -353,14 +564,7 @@ class MultiChannelSender {
 
   bool _cancelled = false;
   final List<ChannelStats> channelStats = [];
-
-  // Per-channel queues — reader assigns blocks round-robin so each sender
-  // channel always has its own dedicated work.  This eliminates the Dart
-  // cooperative-scheduling starvation where the first Future to run drains
-  // the entire shared queue before the other Future gets a chance to execute.
-  late final List<Queue<FileBlock>> _channelQueues;
-  late final List<StreamController<void>> _channelSignals;
-  final List<bool> _channelReaderDone = [];
+  final List<Isolate> _isolates = [];
 
   MultiChannelSender({
     required this.targetIps,
@@ -373,13 +577,12 @@ class MultiChannelSender {
 
   void cancel() {
     _cancelled = true;
-    for (final sc in _channelSignals) {
-      sc.add(null);
+    for (final iso in _isolates) {
+      iso.kill(priority: Isolate.immediate);
     }
   }
 
   int _totalSent = 0;
-  int _lastProgressAt = 0;
 
   Future<void> start() async {
     if (targetIps.isEmpty) {
@@ -389,274 +592,81 @@ class MultiChannelSender {
 
     final channelCount = targetIps.length;
     debugPrint(
-      '[MultiSend] start channels=$channelCount blockSize=$kBlockSize totalBytes=$totalBytes',
+      '[MultiSend] start channels=$channelCount blockSize=$kBlockSize totalBytes=$totalBytes (isolate+ownIO)',
     );
     channelStats.clear();
-    _channelQueues = List.generate(channelCount, (_) => Queue<FileBlock>());
-    _channelSignals = List.generate(
-      channelCount,
-      (_) => StreamController<void>.broadcast(),
-    );
-    _channelReaderDone.clear();
-    _channelReaderDone.addAll(List.filled(channelCount, false));
-
     for (int i = 0; i < channelCount; i++) {
       channelStats.add(ChannelStats('ch$i'));
     }
 
-    // Start file reader (produces blocks, distributes round-robin)
-    final readerFuture = _readFiles(channelCount);
-
-    // Start sender channels (each consumes its own queue)
-    final senderFutures = <Future>[];
-    for (int i = 0; i < channelCount; i++) {
-      senderFutures.add(_senderChannel(i));
+    // Build a lightweight manifest (just paths and sizes — no file data)
+    final manifest = <Map<String, dynamic>>[];
+    for (final tf in files) {
+      final stat = await tf.file.stat();
+      manifest.add({
+        'filePath': tf.file.path,
+        'relativePath': tf.relativePath,
+        'isDir': stat.type == FileSystemEntityType.directory,
+        'size': stat.type == FileSystemEntityType.directory ? 0 : stat.size,
+        'lastModified': stat.modified.millisecondsSinceEpoch,
+      });
     }
 
+    // Spawn one isolate per channel — each reads its own file blocks
+    final doneCompleters = <Completer<void>>[];
+
+    for (int i = 0; i < channelCount; i++) {
+      final completer = Completer<void>();
+      doneCompleters.add(completer);
+
+      final mainReceivePort = ReceivePort();
+      final isolate = await Isolate.spawn(_senderIsolateEntry, [
+        mainReceivePort.sendPort,
+        targetIps[i],
+        kMultiChannelBasePort + i,
+        i,
+        channelCount,
+        manifest,
+      ]);
+      _isolates.add(isolate);
+
+      mainReceivePort.listen((message) {
+        if (message is int) {
+          channelStats[i].bytesSent = message;
+          channelStats[i].sampleSpeed();
+          _totalSent = channelStats.fold(0, (a, s) => a + s.bytesSent);
+          onProgress?.call(_totalSent, totalBytes, channelStats);
+        } else if (message is String) {
+          if (message == 'connected') {
+            debugPrint(
+              '[MultiSend ch$i] Connected to ${targetIps[i]}:${kMultiChannelBasePort + i}',
+            );
+          } else if (message == 'done') {
+            if (!completer.isCompleted) completer.complete();
+          } else if (message.startsWith('log:')) {
+            debugPrint(message.substring(4));
+          } else if (message.startsWith('error:')) {
+            if (!completer.isCompleted) {
+              completer.completeError(message.substring(6));
+            }
+          }
+        }
+      });
+    }
+
+    // Wait for all isolates to complete
     try {
-      await Future.wait([readerFuture, ...senderFutures]);
+      await Future.wait(
+        doneCompleters.map((c) => c.future),
+      ).timeout(const Duration(seconds: 300));
       if (!_cancelled) {
         onComplete?.call();
       }
     } catch (e) {
       onError?.call(e.toString());
     } finally {
-      for (final sc in _channelSignals) {
-        await sc.close();
-      }
-    }
-  }
-
-  /// Reads all files into 1 MB blocks and distributes them round-robin across
-  /// per-channel queues.  Round-robin guarantees that every channel always has
-  /// roughly the same number of blocks regardless of which Future the Dart
-  /// scheduler happened to run first.
-  Future<void> _readFiles(int channelCount) async {
-    int fileIndex = 0;
-    int roundRobin = 0; // which channel gets the next block
-    try {
-      for (final tf in files) {
-        if (_cancelled) break;
-        final stat = await tf.file.stat();
-
-        if (stat.type == FileSystemEntityType.directory) {
-          // Assign directory marker to the next channel in round-robin, same
-          // as file blocks — broadcasting to all channels would cause the
-          // merge-sort writer to see duplicate directory entries.
-          final ch = roundRobin % channelCount;
-          roundRobin++;
-          _channelQueues[ch].add(
-            FileBlock(
-              isFile: false,
-              fileIndex: fileIndex,
-              path: tf.relativePath,
-              lastModified: stat.modified.millisecondsSinceEpoch,
-            ),
-          );
-          _channelSignals[ch].add(null);
-          fileIndex++;
-          continue;
-        }
-
-        final length = stat.size;
-        final modified = stat.modified.millisecondsSinceEpoch;
-        final raf = await tf.file.open(mode: FileMode.read);
-        try {
-          if (length == 0) {
-            final ch = roundRobin % channelCount;
-            roundRobin++;
-            _channelQueues[ch].add(
-              FileBlock(
-                isFile: true,
-                fileIndex: fileIndex,
-                path: tf.relativePath,
-                lastModified: modified,
-                totalSize: 0,
-                blockIndex: 0,
-                data: Uint8List(0),
-              ),
-            );
-            _channelSignals[ch].add(null);
-          } else {
-            int remaining = length;
-            int blkIdx = 0;
-            while (remaining > 0 && !_cancelled) {
-              final chunkSize = remaining < kBlockSize ? remaining : kBlockSize;
-              final data = await raf.read(chunkSize);
-              final ch = roundRobin % channelCount;
-              roundRobin++;
-              _channelQueues[ch].add(
-                FileBlock(
-                  isFile: true,
-                  fileIndex: fileIndex,
-                  path: tf.relativePath,
-                  lastModified: modified,
-                  totalSize: length,
-                  blockIndex: blkIdx,
-                  data: Uint8List.fromList(data),
-                ),
-              );
-              _channelSignals[ch].add(null);
-              remaining -= data.length;
-              blkIdx++;
-              // Back-pressure: if any channel's queue is too deep, yield so
-              // the sender tasks can drain.
-              final maxQ = _channelQueues
-                  .map((q) => q.length)
-                  .reduce((a, b) => a > b ? a : b);
-              if (maxQ > 32 && !_cancelled) {
-                await Future.delayed(const Duration(milliseconds: 2));
-              }
-            }
-          }
-        } finally {
-          await raf.close();
-        }
-        fileIndex++;
-      }
-    } catch (e) {
-      debugPrint('[MultiSend] Reader error: $e');
-      for (int i = 0; i < channelCount; i++) {
-        _channelQueues[i].add(FileBlock.readErrorFlag);
-        _channelSignals[i].add(null);
-        _channelReaderDone[i] = true;
-      }
-      return;
-    }
-
-    // Push one EOF sentinel per channel.
-    for (int i = 0; i < channelCount; i++) {
-      _channelQueues[i].add(FileBlock.endPoint);
-      _channelSignals[i].add(null);
-      _channelReaderDone[i] = true;
-    }
-  }
-
-  /// Connects a TCP socket and sends blocks from this channel's own queue.
-  Future<void> _senderChannel(int chIndex) async {
-    Socket? socket;
-    try {
-      final ip = targetIps[chIndex];
-      final port = kMultiChannelBasePort + chIndex;
-      socket = await Socket.connect(
-        ip,
-        port,
-        timeout: const Duration(seconds: 15),
-      );
-      socket.setOption(SocketOption.tcpNoDelay, true);
-      debugPrint('[MultiSend ch$chIndex] Connected to $ip:$port');
-
-      bool pipeError = false;
-      socket.done.catchError((e) {
-        pipeError = true;
-        debugPrint('[MultiSend ch$chIndex] Pipe error: $e');
-      });
-
-      final myQueue = _channelQueues[chIndex];
-      int sentBlocks = 0;
-      var lastLogAt = DateTime.now();
-
-      while (!_cancelled && !pipeError) {
-        FileBlock? block;
-
-        if (myQueue.isNotEmpty) {
-          block = myQueue.removeFirst();
-        } else if (_channelReaderDone[chIndex]) {
-          break;
-        } else {
-          // Wait for reader to assign a block to this channel.
-          await _channelSignals[chIndex].stream.first.timeout(
-            const Duration(milliseconds: 500),
-            onTimeout: () {},
-          );
-          if (myQueue.isNotEmpty) {
-            block = myQueue.removeFirst();
-          } else {
-            continue;
-          }
-        }
-
-        // Sentinel handling
-        if (block.isSentinel) {
-          final bb = BytesBuilder(copy: false);
-          if (identical(block, FileBlock.endPoint)) {
-            _writeUint16(bb, TransferIds.eof);
-          } else if (identical(block, FileBlock.interruptFlag)) {
-            _writeUint16(bb, TransferIds.interrupt);
-          } else if (identical(block, FileBlock.readErrorFlag)) {
-            _writeUint16(bb, TransferIds.readError);
-          } else {
-            _writeUint16(bb, TransferIds.writeError);
-          }
-          socket.add(bb.toBytes());
-          await socket.flush();
-          break;
-        }
-
-        // Serialize and send block
-        final bb = BytesBuilder(copy: false);
-        _writeUint16(bb, block.isFile ? TransferIds.file : TransferIds.folder);
-        _writeInt32(bb, block.fileIndex);
-        _writeUTF(bb, block.path);
-        _writeInt64(bb, block.lastModified);
-        if (block.isFile) {
-          _writeInt64(bb, block.totalSize);
-          _writeInt32(bb, block.blockIndex);
-          _writeInt32(bb, block.length);
-        }
-        socket.add(bb.toBytes());
-        if (block.isFile && block.data != null && block.data!.isNotEmpty) {
-          socket.add(block.data!);
-        }
-
-        final bytes = block.length;
-        channelStats[chIndex].bytesSent += bytes;
-        _totalSent += bytes;
-        sentBlocks++;
-
-        // Yield every ~4 MB (4 blocks) to share the event loop.
-        if (sentBlocks % 4 == 0) {
-          if (sentBlocks % 64 == 0) {
-            await socket.flush();
-          } else {
-            await Future<void>.delayed(Duration.zero);
-          }
-
-          // Only do expensive work (speed sample, progress, logging) on
-          // yield boundaries to keep the hot path tight.
-          channelStats[chIndex].sampleSpeed();
-          if (_totalSent - _lastProgressAt > 4 * 1024 * 1024) {
-            _lastProgressAt = _totalSent;
-            onProgress?.call(_totalSent, totalBytes, channelStats);
-          }
-
-          final now = DateTime.now();
-          if (now.difference(lastLogAt).inMilliseconds >= 1000) {
-            final speed = (channelStats[chIndex].sendSpeed / (1024 * 1024))
-                .toStringAsFixed(1);
-            debugPrint(
-              '[MultiSend ch$chIndex] blocks=$sentBlocks queue=${myQueue.length} sent=${channelStats[chIndex].bytesSent} speed=${speed}MB/s total=$_totalSent',
-            );
-            lastLogAt = now;
-          }
-        }
-      }
-
-      if (!pipeError) {
-        await socket.flush();
-      }
-    } catch (e) {
-      debugPrint('[MultiSend ch$chIndex] Error: $e');
-      rethrow;
-    } finally {
-      // Use graceful close() instead of destroy() to avoid TCP RST
-      // that discards unACKed data still in the OS send buffer.
-      try {
-        await socket?.close();
-      } catch (_) {
-        try {
-          socket?.destroy();
-        } catch (_) {}
+      for (final iso in _isolates) {
+        iso.kill(priority: Isolate.immediate);
       }
     }
   }
@@ -927,9 +937,9 @@ class MultiChannelReceiver {
   Future<void> _writer() async {
     final openRafs = <int, RandomAccessFile>{};
     final relativePaths = <int, String>{};
-    final expectedBlocks = <int, int>{};
-    final writtenBlocks = <int, int>{};
-    int writeCount = 0;
+    final expectedBytes = <int, int>{}; // totalSize per file (not block-count)
+    final writtenBytes = <int, int>{}; // bytes written per file
+    final rafPositions = <int, int>{}; // cached write position per file
     int rr = 0;
     int wroteBlocks = 0;
     var lastLogAt = DateTime.now();
@@ -983,43 +993,54 @@ class MultiChannelReceiver {
           final file = File(filePath);
           openRafs[fileIndex] = await file.open(mode: FileMode.write);
           relativePaths[fileIndex] = block.path;
-          expectedBlocks[fileIndex] = block.totalSize == 0
-              ? 1
-              : ((block.totalSize + kBlockSize - 1) ~/ kBlockSize);
-          writtenBlocks[fileIndex] = 0;
+          expectedBytes[fileIndex] = block.totalSize; // track by bytes
+          writtenBytes[fileIndex] = 0;
+          rafPositions[fileIndex] = 0;
         }
 
         final raf = openRafs[fileIndex]!;
-        await raf.setPosition(block.startPosition);
+        // Only seek if the write head is not already at the right position.
+        // With stripe-based sender, blocks arrive sequentially so this
+        // skip eliminates the setPosition syscall on every block.
+        final expectedPos = block.startPosition;
+        if ((rafPositions[fileIndex] ?? 0) != expectedPos) {
+          await raf.setPosition(expectedPos);
+          rafPositions[fileIndex] = expectedPos;
+        }
         if (block.data != null && block.data!.isNotEmpty) {
           await raf.writeFrom(block.data!);
+          rafPositions[fileIndex] =
+              (rafPositions[fileIndex] ?? 0) + block.data!.length;
         }
         wroteBlocks++;
+        writtenBytes[fileIndex] =
+            (writtenBytes[fileIndex] ?? 0) + (block.data?.length ?? 0);
 
-        writtenBlocks[fileIndex] = (writtenBlocks[fileIndex] ?? 0) + 1;
-
-        final expected = expectedBlocks[fileIndex] ?? 0;
-        final written = writtenBlocks[fileIndex] ?? 0;
-        if (expected > 0 && written >= expected) {
+        // File complete when all bytes have been written.
+        // Uses totalSize directly — works for any block size.
+        final expBytes = expectedBytes[fileIndex] ?? 0;
+        final wBytes = writtenBytes[fileIndex] ?? 0;
+        if (expBytes == 0 || wBytes >= expBytes) {
           await raf.flush();
           await raf.close();
           openRafs.remove(fileIndex);
-          expectedBlocks.remove(fileIndex);
-          writtenBlocks.remove(fileIndex);
+          expectedBytes.remove(fileIndex);
+          writtenBytes.remove(fileIndex);
+          rafPositions.remove(fileIndex);
           final rel = relativePaths.remove(fileIndex);
           if (rel != null) {
             onFileReceived?.call(rel, '$saveBasePath/$rel');
           }
         }
 
-        writeCount++;
-        if (writeCount % 8 == 0) {
-          await Future<void>.delayed(const Duration(milliseconds: 1));
-        }
-
         if (queueIdx >= 0 && _channelQueues[queueIdx].length <= 3) {
           _blockPushed.add(null);
         }
+
+        // Yield to the event loop after every block so both receiver channels
+        // can process incoming TCP data. Without this yield the writer
+        // monopolizes the thread and starves the channel readers.
+        await Future<void>.delayed(Duration.zero);
 
         final now = DateTime.now();
         if (now.difference(lastLogAt).inMilliseconds >= 1000) {
