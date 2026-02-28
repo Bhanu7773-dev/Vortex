@@ -7,6 +7,7 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 import '../viewmodels/media_viewmodels.dart';
 import '../theme/app_theme.dart';
 import '../utils/file_opener.dart';
+import '../widgets/share_sheet.dart';
 
 // ─── Shared thumbnail widget for a video file ──
 class _VideoThumb extends StatefulWidget {
@@ -295,7 +296,13 @@ class VideoAlbumDetailView extends StatelessWidget {
                         right: 16,
                         bottom: MediaQuery.of(context).padding.bottom + 12,
                         child: _ActionBar(
-                          onShare: () {},
+                          onShare: () {
+                            showVortexShareSheet(
+                              context,
+                              vm.selectedPaths.toList(),
+                              onSendStarted: vm.cancelSelection,
+                            );
+                          },
                           onDelete: vm.selectedPaths.isEmpty
                               ? null
                               : () => _deleteDialog(

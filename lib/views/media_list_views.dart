@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/share_sheet.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/media_viewmodels.dart';
@@ -97,7 +98,13 @@ class _AudioViewState extends State<AudioView> {
                           ),
                     if (vm.isSelectionMode)
                       _BottomActionBar(
-                        onShare: () {},
+                        onShare: () {
+                          showVortexShareSheet(
+                            context,
+                            vm.selectedPaths.toList(),
+                            onSendStarted: vm.cancelSelection,
+                          );
+                        },
                         onDelete: vm.selectedPaths.isEmpty
                             ? null
                             : () => _showDeleteDialog(
@@ -311,7 +318,13 @@ class _ArchivesViewState extends State<ArchivesView> {
                           ),
                     if (vm.isSelectionMode)
                       _BottomActionBar(
-                        onShare: () {},
+                        onShare: () {
+                          showVortexShareSheet(
+                            context,
+                            vm.selectedPaths.toList(),
+                            onSendStarted: vm.cancelSelection,
+                          );
+                        },
                         onDelete: vm.selectedPaths.isEmpty
                             ? null
                             : () => _showDeleteDialog(
@@ -526,7 +539,13 @@ class _ApksViewState extends State<ApksView> {
                           ),
                     if (vm.isSelectionMode)
                       _BottomActionBar(
-                        onShare: () {},
+                        onShare: () {
+                          showVortexShareSheet(
+                            context,
+                            vm.selectedPaths.toList(),
+                            onSendStarted: vm.cancelSelection,
+                          );
+                        },
                         onDelete: vm.selectedPaths.isEmpty
                             ? null
                             : () => _showDeleteDialog(
@@ -768,7 +787,13 @@ class _DocumentsViewState extends State<DocumentsView> {
                           ),
                     if (vm.isSelectionMode)
                       _BottomActionBar(
-                        onShare: () {},
+                        onShare: () {
+                          showVortexShareSheet(
+                            context,
+                            vm.selectedPaths.toList(),
+                            onSendStarted: vm.cancelSelection,
+                          );
+                        },
                         onDelete: vm.selectedPaths.isEmpty
                             ? null
                             : () => _showDeleteDialog(

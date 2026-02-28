@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../widgets/share_sheet.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/photos_viewmodel.dart';
 import '../theme/app_theme.dart';
@@ -35,12 +36,7 @@ class PhotosView extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.more_vert, color: Colors.white),
-                  onPressed: () {},
-                ),
-              ],
+              actions: [],
             ),
             body: viewModel.isLoading
                 ? const Center(
@@ -446,7 +442,17 @@ class _PremiumSelectionBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _BarAction(icon: Icons.share_rounded, label: 'Share', onTap: () {}),
+          _BarAction(
+            icon: Icons.share_rounded,
+            label: 'Share',
+            onTap: () {
+              showVortexShareSheet(
+                context,
+                vm.selectedPaths.toList(),
+                onSendStarted: vm.cancelSelection,
+              );
+            },
+          ),
           Container(width: 1, height: 36, color: Colors.white12),
           _BarAction(
             icon: Icons.delete_outline_rounded,

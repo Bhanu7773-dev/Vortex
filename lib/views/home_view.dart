@@ -88,68 +88,68 @@ class _HomeViewState extends State<HomeView> {
                   ),
                 )
               else
-                ...cm.connectedDeviceNames.map(
-                  (deviceName) {
-                    final mode = cm.getDeviceMode(deviceName);
-                    final modeIcon = mode == 'both'
-                        ? Icons.sync_alt
-                        : mode == 'usb'
-                            ? Icons.usb
-                            : Icons.wifi;
-                    final modeLabel = mode == 'both'
-                        ? 'Wi-Fi + USB'
-                        : mode == 'usb'
-                            ? 'USB'
-                            : 'Wi-Fi';
-                    final modeColor = mode == 'both'
-                        ? Colors.purpleAccent
-                        : mode == 'usb'
-                            ? Colors.orangeAccent
-                            : Colors.blueAccent;
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: modeColor.withOpacity(0.2),
-                        child: Icon(modeIcon, color: modeColor),
-                      ),
-                      title: Text(
-                        deviceName,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Row(
-                        children: [
-                          Icon(modeIcon, size: 12, color: modeColor),
-                          const SizedBox(width: 4),
-                          Text(
-                            modeLabel,
-                            style: TextStyle(color: modeColor, fontSize: 12),
-                          ),
-                          if (cm.getDeviceIp(deviceName) != null) ...[
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                cm.getDeviceIp(deviceName)!,
-                                style: const TextStyle(
-                                    color: Colors.white38, fontSize: 11),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      trailing: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
+                ...cm.connectedDeviceNames.map((deviceName) {
+                  final mode = cm.getDeviceMode(deviceName);
+                  final modeIcon = mode == 'both'
+                      ? Icons.sync_alt
+                      : mode == 'usb'
+                      ? Icons.usb
+                      : Icons.wifi;
+                  final modeLabel = mode == 'both'
+                      ? 'Wi-Fi + USB'
+                      : mode == 'usb'
+                      ? 'USB'
+                      : 'Wi-Fi';
+                  final modeColor = mode == 'both'
+                      ? Colors.purpleAccent
+                      : mode == 'usb'
+                      ? Colors.orangeAccent
+                      : Colors.blueAccent;
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: modeColor.withOpacity(0.2),
+                      child: Icon(modeIcon, color: modeColor),
+                    ),
+                    title: Text(
+                      deviceName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Row(
+                      children: [
+                        Icon(modeIcon, size: 12, color: modeColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          modeLabel,
+                          style: TextStyle(color: modeColor, fontSize: 12),
                         ),
-                        onPressed: () {
-                          cm.disconnectDevice(deviceName);
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(Icons.link_off, size: 20),
-                        label: const Text('Unlink'),
+                        if (cm.getDeviceIp(deviceName) != null) ...[
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              cm.getDeviceIp(deviceName)!,
+                              style: const TextStyle(
+                                color: Colors.white38,
+                                fontSize: 11,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    trailing: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
                       ),
-                    );
-                  },
-                ),
+                      onPressed: () {
+                        cm.disconnectDevice(deviceName);
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.link_off, size: 20),
+                      label: const Text('Unlink'),
+                    ),
+                  );
+                }),
               const SizedBox(height: 16),
             ],
           ),
@@ -177,9 +177,7 @@ class _HomeViewState extends State<HomeView> {
                       icon: const Icon(Icons.download_rounded),
                       onPressed: () => Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => const ReceiveView(),
-                        ),
+                        MaterialPageRoute(builder: (_) => const ReceiveView()),
                       ),
                     ),
                     if (hasActive)
@@ -203,7 +201,6 @@ class _HomeViewState extends State<HomeView> {
                 );
               },
             ),
-            IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
           ],
         ),
         body: Consumer<HomeViewModel>(
