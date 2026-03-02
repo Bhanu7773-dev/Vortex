@@ -936,6 +936,7 @@ class MultiChannelReceiver {
   /// a slower channel.
   Future<void> _writer() async {
     final openRafs = <int, RandomAccessFile>{};
+    final openFilePaths = <int, String>{}; // absolute path for each open file
     final relativePaths = <int, String>{};
     final expectedBytes = <int, int>{}; // totalSize per file (not block-count)
     final writtenBytes = <int, int>{}; // bytes written per file
@@ -992,6 +993,7 @@ class MultiChannelReceiver {
         if (!openRafs.containsKey(fileIndex)) {
           final file = File(filePath);
           openRafs[fileIndex] = await file.open(mode: FileMode.write);
+          openFilePaths[fileIndex] = filePath;
           relativePaths[fileIndex] = block.path;
           expectedBytes[fileIndex] = block.totalSize; // track by bytes
           writtenBytes[fileIndex] = 0;
@@ -1057,6 +1059,18 @@ class MultiChannelReceiver {
           );
           lastLogAt = now;
         }
+      }
+
+      if (_cancelled) {
+        // Transfer was cancelled — close and delete all partially-written files.
+        for (final entry in openRafs.entries) {
+          try { await entry.value.close(); } catch (_) {}
+          final path = openFilePaths[entry.key];
+          if (path != null) {
+            try { await File(path).delete(); } catch (_) {}
+          }
+        }
+        return;
       }
 
       for (final entry in openRafs.entries) {

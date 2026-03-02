@@ -128,32 +128,65 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       connectionManager.onFileReceiveComplete = (id, relativePath, savedPath) {
         transferService.completeReceive(id: id, savedPath: savedPath);
       };
+
+      // Cross-side cancel notifications
+      connectionManager.onSenderCancelledTransfer = () {
+        // Mark all active (non-complete) receive jobs as cancelled by sender.
+        for (final job in List.of(transferService.receiveJobs)) {
+          if (!job.isComplete && !job.cancelled) {
+            transferService.cancelReceiveBySender(job.id);
+          }
+        }
+      };
+
+      connectionManager.onReceiverCancelledTransfer = () {
+        transferService.cancelJobByReceiver();
+      };
     }); // end addPostFrameCallback
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       body: IndexedStack(index: _currentIndex, children: _pages),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        shape: const CircleBorder(),
-        backgroundColor: Colors.blue, // Themed blue colored
-        onPressed: () {
-          _showShareOptions(context);
-        },
-        child: const Icon(Icons.link, color: Colors.white), // Link icon
+      bottomNavigationBar: _buildBottomBar(context),
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0D0D0D),
+        border: Border(
+          top: BorderSide(color: Color(0xFF1E1E1E), width: 1),
+        ),
       ),
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8.0,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(icon: Icons.access_time, label: 'Recent', index: 0),
-            const SizedBox(width: 48), // Add space in the middle
-            _buildNavItem(icon: Icons.folder, label: 'Files', index: 1),
-          ],
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 68,
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildNavItem(
+                  icon: Icons.inbox_outlined,
+                  selectedIcon: Icons.inbox_rounded,
+                  label: 'Received',
+                  index: 0,
+                ),
+              ),
+              _buildLinkButton(context),
+              Expanded(
+                child: _buildNavItem(
+                  icon: Icons.folder_outlined,
+                  selectedIcon: Icons.folder_rounded,
+                  label: 'Files',
+                  index: 1,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -161,32 +194,72 @@ class _MainWrapperViewState extends State<MainWrapperView> {
 
   Widget _buildNavItem({
     required IconData icon,
+    required IconData selectedIcon,
     required String label,
     required int index,
   }) {
     final isSelected = _currentIndex == index;
-    final color = isSelected ? Colors.blue : Colors.grey;
     return InkWell(
       onTap: () => setState(() => _currentIndex = index),
-      borderRadius: BorderRadius.circular(20),
-      child: SizedBox(
-        width: 72,
-        height: 40,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
+      splashColor: Colors.blue.withOpacity(0.08),
+      highlightColor: Colors.transparent,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? const Color(0xFF1A3A5C)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Icon(
+              isSelected ? selectedIcon : icon,
+              color: isSelected ? Colors.blue.shade300 : const Color(0xFF6B6B6B),
+              size: 22,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.blue.shade300 : const Color(0xFF6B6B6B),
+              fontSize: 11,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLinkButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showShareOptions(context),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1565C0),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.35),
+              blurRadius: 18,
+              spreadRadius: 0,
+              offset: const Offset(0, 4),
             ),
           ],
+        ),
+        child: const Icon(
+          Icons.cyclone_rounded,
+          color: Colors.white,
+          size: 44,
         ),
       ),
     );

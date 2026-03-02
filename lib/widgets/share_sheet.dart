@@ -411,6 +411,9 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
   Timer? _speedTimer;
   final List<double> _speedHistory = [];
   static const int _maxSpeedSamples = 30;
+  /// The ID of the job this dialog was opened for, so we can track it even
+  /// after it becomes isComplete/cancelled (when activeJob returns null).
+  String? _trackedJobId;
 
   @override
   void initState() {
@@ -448,7 +451,52 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
         content: ListenableBuilder(
           listenable: widget.transferService,
           builder: (context, _) {
-            final job = widget.transferService.activeJob;
+            // Try to track by ID so we see cancelled state even after
+            // activeJob returns null.
+            TransferJob? job = widget.transferService.activeJob;
+            if (job != null && _trackedJobId == null) {
+              _trackedJobId = job.id;
+            } else if (job == null && _trackedJobId != null) {
+              job = widget.transferService.jobs
+                  .where((j) => j.id == _trackedJobId)
+                  .firstOrNull;
+            }
+
+            // Job was cancelled — show cancel message, then close.
+            if (job != null && job.cancelled) {
+              if (!_done) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _done = true);
+                  Future.delayed(const Duration(seconds: 2), () {
+                    if (mounted) {
+                      widget.transferService.dismissCompleted();
+                      Navigator.of(context, rootNavigator: true).pop();
+                    }
+                  });
+                });
+              }
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.cancel_rounded,
+                        color: Colors.grey.shade400, size: 28),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        job.cancelMessage ?? 'Transfer cancelled.',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
 
             final allBytesSent = job == null || job.progress >= 1.0;
             if (allBytesSent && !_done) {
@@ -603,7 +651,13 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
               return TextButton(
                 onPressed: () {
                   final job = widget.transferService.activeJob;
-                  if (job != null) widget.transferService.cancelJob(job.id);
+                  if (job != null) {
+                    widget.transferService.cancelJob(job.id);
+                    // Tell the receiver we cancelled.
+                    context
+                        .read<ConnectionManager>()
+                        .sendTransferCancelledBySender(job.deviceName);
+                  }
                   Navigator.pop(context);
                 },
                 child: const Text(

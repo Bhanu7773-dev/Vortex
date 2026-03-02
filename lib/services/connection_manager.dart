@@ -68,6 +68,12 @@ class ConnectionManager extends ChangeNotifier {
   // Callback when a file is fully received: (relativePath, savedPath)
   Function(String relativePath, String savedPath)? onFileReceived;
 
+  /// Fired on the RECEIVER device when the sender cancels the transfer.
+  VoidCallback? onSenderCancelledTransfer;
+
+  /// Fired on the SENDER device when the receiver cancels the transfer.
+  VoidCallback? onReceiverCancelledTransfer;
+
   // Progress callbacks for incoming receive
   Function(String id, String relativePath, int totalBytes)? onFileReceiveStart;
   Function(String id, int receivedBytes)? onFileReceiveProgress;
@@ -254,6 +260,12 @@ class ConnectionManager extends ChangeNotifier {
           if (!dataCompleter.isCompleted) dataCompleter.complete();
         });
         sub.onDone(() {
+          // If the job was removed from _activeReceiveSockets before onDone
+          // fires, it means cancelReceiveJob() destroyed the socket — treat
+          // as cancellation rather than a clean EOF.
+          if (!_activeReceiveSockets.containsKey(jobId)) {
+            cancelled = true;
+          }
           if (!dataCompleter.isCompleted) dataCompleter.complete();
         });
 
@@ -261,13 +273,18 @@ class ConnectionManager extends ChangeNotifier {
         await dataCompleter.future;
       }
 
-      // All bytes are in the sink — notify the UI to show "Saving…"
-      onFileReceiveSaving?.call(jobId);
-
       await sink.flush();
       await sink.close();
 
-      if (cancelled) return; // Receiver was cancelled midway
+      if (cancelled) {
+        // Delete the partial file so it doesn't litter the receive folder.
+        try { await file.delete(); } catch (_) {}
+        _activeReceiveSockets.remove(jobId);
+        return;
+      }
+
+      // All bytes are in the sink — notify the UI to show "Saving…"
+      onFileReceiveSaving?.call(jobId);
 
       // Send single ACK byte to let sender know we saved exactly what they sent.
       socket.add([0x06]);
@@ -283,12 +300,40 @@ class ConnectionManager extends ChangeNotifier {
     }
   }
 
-  /// Cancel an active receive job by jobId (closes socket)
+  /// Cancel an active receive job by jobId (closes socket) and notify the sender.
   void cancelReceiveJob(String jobId) {
+    // Single-channel TCP receive
     final sock = _activeReceiveSockets.remove(jobId);
     if (sock != null) {
       try {
         sock.destroy();
+      } catch (_) {}
+    }
+    // Multi-channel receive
+    if (jobId == _activeMultiReceiveJobId) {
+      _activeMultiReceiver?.cancel();
+      _activeMultiReceiver = null;
+      _activeMultiReceiveJobId = null;
+    }
+    // Tell connected sender(s) that we cancelled.
+    _broadcastControl({'type': 'transfer_cancelled_by_receiver'});
+  }
+
+  /// Send a cancel notification to a specific device (used by sender side).
+  void sendTransferCancelledBySender(String deviceName) {
+    final ch = _activeChannels[deviceName];
+    if (ch == null) return;
+    try {
+      ch.sink.add(jsonEncode({'type': 'transfer_cancelled_by_sender'}));
+    } catch (_) {}
+  }
+
+  /// Broadcast a JSON control message to all connected WebSocket channels.
+  void _broadcastControl(Map<String, dynamic> msg) {
+    final encoded = jsonEncode(msg);
+    for (final ch in _activeChannels.values) {
+      try {
+        ch.sink.add(encoded);
       } catch (_) {}
     }
   }
@@ -376,7 +421,7 @@ class ConnectionManager extends ChangeNotifier {
       );
       final socket = await WebSocket.connect(
         wsUrl.toString(),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 7));
       final channel = IOWebSocketChannel(socket);
       _setupChannel(name, channel, ip: ip, mode: connectionMode);
       // Store all known IPs for this device (enables multi-channel later)
@@ -502,6 +547,14 @@ class ConnectionManager extends ChangeNotifier {
             _pendingMcAccept.complete(msg);
           }
           break;
+        case 'transfer_cancelled_by_sender':
+          // Receiver gets this — the sender has cancelled.
+          onSenderCancelledTransfer?.call();
+          break;
+        case 'transfer_cancelled_by_receiver':
+          // Sender gets this — the receiver has cancelled.
+          onReceiverCancelledTransfer?.call();
+          break;
         default:
           break;
       }
@@ -588,6 +641,17 @@ class ConnectionManager extends ChangeNotifier {
 
       final saveDir = await TransferService.getReceiveDir();
 
+      // Build a human-friendly label before creating the receiver so the
+      // onComplete closure can capture it.
+      final fileCount = files.length;
+      final String receiveLabel;
+      if (fileCount == 1) {
+        final firstPath = (files.first['path'] as String?) ?? 'file';
+        receiveLabel = firstPath.split('/').last;
+      } else {
+        receiveLabel = '$fileCount files from $deviceName';
+      }
+
       // Create the receiver
       _activeMultiReceiver = MultiChannelReceiver(
         channelCount: channelCount,
@@ -599,7 +663,7 @@ class ConnectionManager extends ChangeNotifier {
           debugPrint('[MultiRecv] Transfer from $deviceName complete');
           onFileReceiveComplete?.call(
             jobId,
-            '${files.length} files',
+            receiveLabel,
             saveDir.path,
           );
           _activeMultiReceiver = null;
@@ -648,12 +712,8 @@ class ConnectionManager extends ChangeNotifier {
       final channel = _activeChannels[deviceName];
       channel?.sink.add(jsonEncode(accept));
 
-      // Notify UI that a multi-channel receive is starting
-      onFileReceiveStart?.call(
-        jobId,
-        '${files.length} files (multi-channel)',
-        totalBytes,
-      );
+      // Notify UI that a multi-channel receive is starting.
+      onFileReceiveStart?.call(jobId, receiveLabel, totalBytes);
     } catch (e) {
       debugPrint('[MultiRecv] Failed to set up multi-channel: $e');
     }

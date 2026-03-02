@@ -106,9 +106,12 @@ class TransferJob {
     _speed.record(sentBytes);
   }
 
+  /// Optional message shown instead of the generic 'Cancelled' label.
+  String? cancelMessage;
+
   String get statusText {
     if (error != null) return 'Error: $error';
-    if (cancelled) return 'Cancelled';
+    if (cancelled) return cancelMessage ?? 'Cancelled';
     if (isComplete)
       return 'Done – $completedFiles file${completedFiles == 1 ? '' : 's'}';
     return '$completedFiles / $totalFiles  •  $sentText / $totalText';
@@ -130,6 +133,9 @@ class ReceiveJob {
   bool isSaving; // all bytes received, file is being flushed to disk
   String? savedPath;
   final DateTime startedAt;
+
+  /// Human-readable reason for cancellation / error.
+  String? cancelMessage;
 
   final _SpeedSampler _speed = _SpeedSampler();
 
@@ -169,6 +175,10 @@ class TransferService extends ChangeNotifier {
 
   // ── Outgoing ────────────────────────────────────────────────────────────────
   final List<TransferJob> jobs = [];
+
+  /// The currently active multi-channel sender, if any.
+  /// Stored so that cancelJob() can kill it immediately.
+  MultiChannelSender? _activeMcSender;
 
   TransferJob? get activeJob =>
       jobs.where((j) => !j.isComplete && !j.cancelled).firstOrNull;
@@ -324,13 +334,18 @@ class TransferService extends ChangeNotifier {
       },
       onComplete: () {
         job.completedFiles = job.totalFiles;
+        _activeMcSender = null;
         if (!completer.isCompleted) completer.complete(true);
       },
       onError: (e) {
         debugPrint('[MultiSend] Error: $e');
+        _activeMcSender = null;
         if (!completer.isCompleted) completer.complete(false);
       },
     );
+
+    // Store reference so cancelJob() can kill the isolates.
+    _activeMcSender = sender;
 
     // Start the multi-channel sender
     sender.start();
@@ -511,12 +526,37 @@ class TransferService extends ChangeNotifier {
     if (job == null || job.isComplete || job.cancelled) return;
 
     job.cancelled = true;
-    job.hasError =
-        true; // treat cancellation as an error state for UI bar color
+    job.isComplete = true;
+    job.hasError = true;
+    job.cancelMessage = 'Cancelled';
     _safeNotify();
 
-    // Tell the connection manager to close the socket
+    // Tell the connection manager to close the socket and notify the sender.
     connectionManager.cancelReceiveJob(id);
+  }
+
+  /// Called when the SENDER remotely cancels the transfer.
+  void cancelReceiveBySender(String id) {
+    final job = receiveJobs.where((j) => j.id == id).firstOrNull;
+    if (job == null || job.isComplete || job.cancelled) return;
+    job.cancelled = true;
+    job.isComplete = true;
+    job.hasError = true;
+    job.cancelMessage = 'Cancelled by sender';
+    _safeNotify();
+  }
+
+  /// Called when the RECEIVER remotely cancels — marks outgoing job stopped.
+  void cancelJobByReceiver() {
+    final job = activeJob;
+    if (job == null) return;
+    job.cancelled = true;
+    job.isComplete = true;
+    job.cancelMessage = 'Cancelled by receiver';
+    // Kill multi-channel sender if running.
+    _activeMcSender?.cancel();
+    _activeMcSender = null;
+    _safeNotify();
   }
 
   // ------------------------------------------------------------------
@@ -592,6 +632,9 @@ class TransferService extends ChangeNotifier {
     if (job != null && !job.isComplete) {
       job.cancelled = true;
       job.isComplete = true;
+      // Kill the multi-channel sender isolates if active.
+      _activeMcSender?.cancel();
+      _activeMcSender = null;
       _safeNotify();
     }
   }

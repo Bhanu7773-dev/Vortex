@@ -115,16 +115,25 @@ class _ReceiveJobCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final progress = job.progress;
-    final isIndeterminate = job.isSaving || (!job.isComplete && !job.isSaving && progress < 0);
+    // When cancelled or errored, freeze the bar at current progress (no null
+    // / indeterminate so it stops moving). Only isSaving should be indeterminate.
+    final bool isIndeterminate = job.isSaving;
     final progressValue = job.isSaving
         ? null
-        : (job.isComplete || job.hasError)
-            ? (job.hasError ? null : 1.0)
-            : (progress >= 0 ? progress : null);
+        : job.cancelled
+            ? (progress >= 0 ? progress : 0.0)
+            : (job.isComplete || job.hasError)
+                ? (job.hasError ? (progress >= 0 ? progress : 0.0) : 1.0)
+                : (progress >= 0 ? progress : null);
 
     final Color barColor;
     final Color bgColor;
-    if (job.hasError) {
+    // Distinguish user-cancel (grey) from remote-cancel or error (red)
+    final bool isCancelled = job.cancelled;
+    if (isCancelled) {
+      barColor = Colors.grey.shade500;
+      bgColor = Colors.grey.withOpacity(0.08);
+    } else if (job.hasError) {
       barColor = Colors.red.shade400;
       bgColor = Colors.red.withOpacity(0.08);
     } else if (job.isComplete) {
@@ -184,9 +193,13 @@ class _ReceiveJobCard extends StatelessWidget {
                     Text(
                       job.isSaving
                           ? 'Writing to disk…'
-                          : job.isComplete
-                              ? (job.hasError ? 'Failed' : 'Completed')
-                              : '${job.receivedText} / ${job.totalText}',
+                          : job.cancelled
+                              ? (job.cancelMessage ?? 'Cancelled')
+                              : job.isComplete
+                                  ? (job.hasError
+                                      ? (job.cancelMessage ?? 'Failed')
+                                      : 'Completed')
+                                  : '${job.receivedText} / ${job.totalText}',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.5),
                         fontSize: 12,

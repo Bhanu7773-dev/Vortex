@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/recent_model.dart';
 import '../viewmodels/recent_viewmodel.dart';
+import '../utils/file_opener.dart';
+import 'all_files_view.dart';
 
 class RecentView extends StatelessWidget {
   const RecentView({Key? key}) : super(key: key);
@@ -16,21 +18,24 @@ class RecentView extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: Colors.black,
           title: const Text(
-            'Recent',
+            'Received Files',
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
           actions: [
-            IconButton(
-              icon: Icon(Icons.search, color: Colors.white.withOpacity(0.8)),
-              onPressed: () {},
-            ),
-            IconButton(
-              icon: Icon(Icons.list_alt, color: Colors.white.withOpacity(0.8)),
-              onPressed: () {},
-            ),
-            IconButton(
-              icon: Icon(Icons.more_vert, color: Colors.white.withOpacity(0.8)),
-              onPressed: () {},
+            Consumer<RecentViewModel>(
+              builder: (context, vm, _) => IconButton(
+                icon: const Icon(Icons.folder_open_rounded),
+                tooltip: 'Open Vortex folder',
+                onPressed: vm.receiveDirPath.isEmpty
+                    ? null
+                    : () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                AllFilesView(initialPath: vm.receiveDirPath),
+                          ),
+                        ),
+              ),
             ),
           ],
         ),
@@ -49,23 +54,32 @@ class RecentView extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
+                        color: Colors.teal.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Icon(
-                        Icons.history_toggle_off_rounded,
+                        Icons.move_to_inbox_rounded,
                         size: 64,
-                        color: Colors.blue.shade300,
+                        color: Colors.teal.shade300,
                       ),
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'No recent files',
+                      'No received files yet',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.6),
+                        color: Colors.white.withOpacity(0.7),
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Files received via Vortex will appear here',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.35),
+                        fontSize: 13,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
@@ -218,63 +232,142 @@ class _RecentItemCard extends StatelessWidget {
 
   const _RecentItemCard({required this.file});
 
+  IconData _iconForType(String type) {
+    switch (type.toLowerCase()) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+      case 'heic':
+      case 'bmp':
+        return Icons.image_rounded;
+      case 'mp4':
+      case 'mkv':
+      case 'avi':
+      case 'mov':
+      case 'webm':
+      case '3gp':
+        return Icons.video_file_rounded;
+      case 'mp3':
+      case 'aac':
+      case 'wav':
+      case 'flac':
+      case 'm4a':
+      case 'ogg':
+        return Icons.audio_file_rounded;
+      case 'pdf':
+        return Icons.picture_as_pdf_rounded;
+      case 'zip':
+      case 'rar':
+      case '7z':
+      case 'tar':
+      case 'gz':
+        return Icons.folder_zip_rounded;
+      case 'apk':
+        return Icons.android_rounded;
+      case 'doc':
+      case 'docx':
+      case 'txt':
+      case 'odt':
+        return Icons.description_rounded;
+      default:
+        return Icons.insert_drive_file_rounded;
+    }
+  }
+
+  Color _colorForType(String type) {
+    switch (type.toLowerCase()) {
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+      case 'heic':
+      case 'bmp':
+        return Colors.blue;
+      case 'mp4':
+      case 'mkv':
+      case 'avi':
+      case 'mov':
+      case 'webm':
+      case '3gp':
+        return Colors.purple;
+      case 'mp3':
+      case 'aac':
+      case 'wav':
+      case 'flac':
+      case 'm4a':
+      case 'ogg':
+        return Colors.orange;
+      case 'pdf':
+        return Colors.red;
+      case 'zip':
+      case 'rar':
+      case '7z':
+      case 'tar':
+      case 'gz':
+        return Colors.amber;
+      case 'apk':
+        return Colors.green;
+      default:
+        return Colors.teal;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.06),
-                width: 1,
+    final ext = file.type.toLowerCase().replaceAll('.', '');
+    final iconColor = _colorForType(ext);
+    return GestureDetector(
+      onTap: () => FileOpener.openFile(context, file.path),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: iconColor.withOpacity(0.15),
+                  width: 1,
+                ),
+              ),
+              child: Center(
+                child: Icon(
+                  _iconForType(ext),
+                  color: iconColor.withOpacity(0.7),
+                  size: 36,
+                ),
               ),
             ),
-            child: Center(
-              child: Icon(
-                Icons.image_rounded,
-                color: Colors.blue.withOpacity(0.4),
-                size: 36,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            file.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              file.size,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.4),
+                fontSize: 11,
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          file.name,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 4),
-        Center(
-          child: Text(
-            file.size,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.4),
-              fontSize: 11,
-            ),
-          ),
-        ),
-        Center(
-          child: Text(
-            file.type,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.4),
-              fontSize: 11,
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

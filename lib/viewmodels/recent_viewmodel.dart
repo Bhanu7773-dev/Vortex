@@ -1,17 +1,18 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/recent_model.dart';
-import '../services/storage_service.dart';
+import '../services/transfer_service.dart';
 import 'package:intl/intl.dart';
 
 class RecentViewModel with ChangeNotifier {
-  String totalItemsText = '0 items in total';
+  String totalItemsText = '0 received files';
   List<RecentSectionModel> sections = [];
   bool isLoading = true;
   bool _disposed = false;
+  String receiveDirPath = '';
 
   RecentViewModel() {
-    _loadRecentFiles();
+    _loadReceivedFiles();
   }
 
   @override
@@ -20,23 +21,20 @@ class RecentViewModel with ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> _loadRecentFiles() async {
+  Future<void> _loadReceivedFiles() async {
     isLoading = true;
     if (!_disposed) notifyListeners();
 
-    final List<File> allFiles = [];
-    final volumes = await StorageService().getStorageVolumes();
+    final receiveDir = await TransferService.getReceiveDir();
+    receiveDirPath = receiveDir.path;
 
-    for (final vol in volumes) {
-      if (_disposed) return;
-      final root = Directory(vol.path);
-      if (await root.exists()) {
-        await _scanDir(root, allFiles, depth: 0);
-      }
+    final List<File> allFiles = [];
+    if (await receiveDir.exists()) {
+      await _scanDir(receiveDir, allFiles, depth: 0);
     }
     if (_disposed) return;
 
-    // Cache stats asynchronously to avoid O(N log N) statSync() calls on the main thread
+    // Cache stats
     final Map<String, FileStat> statCache = {};
     for (var file in allFiles) {
       if (_disposed) return;
@@ -45,7 +43,7 @@ class RecentViewModel with ChangeNotifier {
       } catch (_) {}
     }
 
-    // Sort by modification time descending
+    // Sort by modification time descending (most recent first)
     allFiles.sort((a, b) {
       final statA = statCache[a.path];
       final statB = statCache[b.path];
@@ -53,7 +51,7 @@ class RecentViewModel with ChangeNotifier {
       return statB.modified.compareTo(statA.modified);
     });
 
-    // Limit to 100 most recent files for performance
+    // Limit to 100 most recent
     final recentFiles = allFiles.take(100).toList();
 
     // Group by date
@@ -65,6 +63,7 @@ class RecentViewModel with ChangeNotifier {
 
         final model = RecentFileModel(
           name: file.path.split('/').last,
+          path: file.path,
           size: _formatSize(stat.size),
           type: file.path.split('.').last.toUpperCase(),
           dateGroup: dateGroup,
@@ -84,7 +83,7 @@ class RecentViewModel with ChangeNotifier {
         )
         .toList();
 
-    // Sort sections (Today, Yesterday, etc.)
+    // Sort sections (Today, Yesterday, then by date)
     const order = ['Today', 'Yesterday'];
     sections.sort((a, b) {
       final idxA = order.indexOf(a.title);
@@ -92,20 +91,20 @@ class RecentViewModel with ChangeNotifier {
       if (idxA != -1 && idxB != -1) return idxA.compareTo(idxB);
       if (idxA != -1) return -1;
       if (idxB != -1) return 1;
-      return 0; // Or compare by actual dates if needed
+      return 0;
     });
 
     int total = 0;
     for (var s in sections) total += s.itemCount;
-    totalItemsText = '$total items in total';
+    totalItemsText = '$total received file${total == 1 ? '' : 's'}';
 
     isLoading = false;
     if (!_disposed) notifyListeners();
   }
 
   Future<void> _scanDir(Directory dir, List<File> out, {int depth = 0}) async {
-    if (depth > 6) return; // Prevent massive deep traversals on Linux Home dir
-    if (out.length > 3000) return; // Cap the max files to process
+    if (depth > 6) return;
+    if (out.length > 3000) return;
 
     try {
       final entities = await dir
@@ -114,20 +113,13 @@ class RecentViewModel with ChangeNotifier {
       for (final e in entities) {
         if (_disposed) return;
         final name = e.path.split('/').last;
-        if (name.startsWith('.'))
-          continue; // Skip hidden folders like .cache, .android, etc.
+        if (name.startsWith('.')) continue;
 
         try {
           if (e is File) {
             out.add(e);
           } else if (e is Directory) {
-            if (name == 'Android') {
-              final media = Directory('${e.path}/media');
-              if (await media.exists())
-                await _scanDir(media, out, depth: depth + 1);
-            } else {
-              await _scanDir(e, out, depth: depth + 1);
-            }
+            await _scanDir(e, out, depth: depth + 1);
           }
         } catch (_) {}
       }

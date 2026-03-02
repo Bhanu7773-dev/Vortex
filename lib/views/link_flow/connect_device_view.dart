@@ -33,8 +33,17 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
 
   String _myDeviceName = 'Unknown Device';
   String _myIp = '127.0.0.1';
+  String? _wifiIp;      // This device's WiFi/LAN interface IP
   List<String> _myAllIps = []; // populated in isBothMode
   bool _isConnecting = false;
+  String? _usbPeerIp;   // IP of connected computer via USB tethering
+  String? _usbPhoneIp;  // This device's own USB tethering interface IP
+  Timer? _usbPollTimer; // Polls USB status while sheet is open
+
+  String? _scanError;   // Inline error shown in the scanner tab
+  bool _scanCooldown = false; // Prevents repeated scans after an error
+
+  bool get _isUsbConnected => _usbPhoneIp != null;
 
   @override
   void initState() {
@@ -48,6 +57,13 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
       vsync: this,
     )..repeat();
     _fetchNetworkInfo();
+    // Poll USB status every 2 s so the card updates without needing a manual refresh
+    if (widget.isUsbMode || widget.isBothMode) {
+      _usbPollTimer = Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => _detectUsbPeerIp(),
+      );
+    }
   }
 
   /// Collects ALL usable IPv4 interfaces (for Both mode).
@@ -101,6 +117,117 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
       final all = await _getAllIps();
       if (mounted) setState(() => _myAllIps = all);
     }
+
+    // Detect connected USB computer IP via ARP cache
+    if (widget.isUsbMode || widget.isBothMode) await _detectUsbPeerIp();
+
+    // Detect WiFi IP for QR embedding (so the other device can verify same network)
+    await _detectWifiIp();
+  }
+
+  /// Finds THIS device's WiFi/LAN interface IP (any non-loopback, non-USB IP).
+  Future<void> _detectWifiIp() async {
+    // USB subnet helper reused here
+    bool looksLikeUsb(String addr) =>
+        addr.startsWith('192.168.42.') ||
+        addr.startsWith('192.168.43.') ||
+        addr.startsWith('192.168.44.') ||
+        (_usbPhoneIp != null &&
+            addr.startsWith(
+                _usbPhoneIp!.substring(0, _usbPhoneIp!.lastIndexOf('.') + 1)));
+
+    String? found;
+    try {
+      final ifaces = await NetworkInterface.list(
+          type: InternetAddressType.IPv4, includeLinkLocal: false);
+      for (final iface in ifaces) {
+        final n = iface.name.toLowerCase();
+        // Skip virtual interfaces
+        if (n.startsWith('docker') || n.startsWith('veth') ||
+            n.startsWith('virbr') || n.startsWith('br-')) continue;
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback && !looksLikeUsb(addr.address)) {
+            found = addr.address;
+            break;
+          }
+        }
+        if (found != null) break;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _wifiIp = found);
+  }
+
+  /// Scans all network interfaces for a USB tethering IP, then checks ARP
+  /// for the connected computer's IP.
+  Future<void> _detectUsbPeerIp() async {
+    // USB tethering interface names used by Android (RNDIS, CDC-ECM, NCM)
+    const usbIfaceNames = ['rndis', 'usb', 'ncm', 'ecm'];
+
+    String? phoneUsbIp;
+    String? detectedPrefix;
+
+    try {
+      // includeLinkLocal: true so we don't accidentally miss anything
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLinkLocal: true,
+      );
+
+      debugPrint('[USB] All interfaces: ${interfaces.map((i) => '${i.name}:${i.addresses.map((a) => a.address).join(',')}').join(' | ')}');
+
+      for (final iface in interfaces) {
+        final n = iface.name.toLowerCase();
+        final isUsbIface = usbIfaceNames.any((prefix) => n.startsWith(prefix));
+        for (final addr in iface.addresses) {
+          if (addr.isLoopback) continue;
+          final ip = addr.address;
+          // Match by interface name OR by the well-known Android tethering subnets
+          final isUsbSubnet = ip.startsWith('192.168.42.') ||
+              ip.startsWith('192.168.43.') ||
+              ip.startsWith('192.168.44.');
+          if (isUsbIface || isUsbSubnet) {
+            phoneUsbIp = ip;
+            detectedPrefix = '${ip.substring(0, ip.lastIndexOf('.'))}.';
+            debugPrint('[USB] Detected USB iface: $n → $ip');
+            break;
+          }
+        }
+        if (phoneUsbIp != null) break;
+      }
+    } catch (e) {
+      debugPrint('[USB] Interface scan error: $e');
+    }
+
+    if (mounted) setState(() => _usbPhoneIp = phoneUsbIp);
+    if (phoneUsbIp == null || detectedPrefix == null) {
+      if (mounted) setState(() => _usbPeerIp = null);
+      return;
+    }
+
+    // Read ARP cache for the connected computer's IP on the same subnet.
+    if (!Platform.isAndroid) return;
+    try {
+      final arpFile = File('/proc/net/arp');
+      if (!await arpFile.exists()) return;
+      final lines = await arpFile.readAsLines();
+      debugPrint('[USB] ARP: ${lines.join(' | ')}');
+      for (final line in lines.skip(1)) {
+        final parts = line.trim().split(RegExp(r'\s+'));
+        if (parts.length < 4) continue;
+        final ip = parts[0];
+        final mac = parts.length > 3 ? parts[3] : '';
+        if (ip.startsWith(detectedPrefix) &&
+            ip != phoneUsbIp &&
+            mac.isNotEmpty &&
+            mac != '00:00:00:00:00:00') {
+          if (mounted) setState(() => _usbPeerIp = ip);
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('[USB] ARP read error: $e');
+    }
+    if (mounted) setState(() => _usbPeerIp = null);
   }
 
   /// Automatically picks the best IP for the given mode.
@@ -139,8 +266,9 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
             if (ip.startsWith('192.168.42.') ||
                 ip.startsWith('192.168.43.') ||
                 ip.startsWith('192.168.44.')) score = 100;
-            // USB interface names on Linux
-            else if (n.startsWith('usb') || n.startsWith('rndis')) score = 80;
+            // USB interface names on Linux / Android (RNDIS, CDC-NCM, ECM)
+            else if (n.startsWith('usb') || n.startsWith('rndis') ||
+                     n.startsWith('ncm') || n.startsWith('ecm')) score = 80;
             // Generic USB host: enp0s26u1u1, enp0s20u1, etc.
             else if (RegExp(r'u\d').hasMatch(n)) score = 70;
             else if (n.startsWith('eth')) score = 40;
@@ -168,8 +296,8 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     }
   }
 
-  void _handleQrDetect(BarcodeCapture capture) {
-    if (_isConnecting) return;
+  Future<void> _handleQrDetect(BarcodeCapture capture) async {
+    if (_isConnecting || _scanCooldown) return;
     final List<Barcode> barcodes = capture.barcodes;
     if (barcodes.isEmpty) return;
 
@@ -192,19 +320,147 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
       return;
     }
 
-    setState(() => _isConnecting = true);
+    // ── Helpers ──────────────────────────────────────────────────────────
+    void showError(String msg) {
+      if (mounted) setState(() { _scanError = msg; _scanCooldown = true; });
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) setState(() { _scanError = null; _scanCooldown = false; });
+      });
+    }
 
-    // Multi-IP QR (Via Both mode on sender side)
-    final List<String> ips = data['ips'] != null
+    final usbPrefix = _usbPhoneIp != null
+        ? '${_usbPhoneIp!.substring(0, _usbPhoneIp!.lastIndexOf('.'))}.': null;
+    bool isUsbIp(String addr) =>
+        (usbPrefix != null && addr.startsWith(usbPrefix)) ||
+        addr.startsWith('192.168.42.') ||
+        addr.startsWith('192.168.43.') ||
+        addr.startsWith('192.168.44.');
+
+    // ── Mode lock: reject QR codes that don't match the selected transport ─
+    final String qrMode = data['mode']?.toString() ?? 'wifi';
+    final String myMode = widget.isBothMode ? 'both' : widget.isUsbMode ? 'usb' : 'wifi';
+    if (qrMode != myMode) {
+      final qrLabel = qrMode == 'both' ? 'Via Both' : qrMode == 'usb' ? 'Via USB' : 'Via Wi-Fi';
+      showError('Wrong QR — this is a $qrLabel code.\nOpen the $qrLabel option to use it.');
+      return;
+    }
+
+    // All IPs from the QR (may include several if sender was in Both mode)
+    final List<String> allIps = data['ips'] != null
         ? List<String>.from(data['ips'] as List)
         : [ip.toString()];
 
+    // QR-embedded transport IPs from the other device
+    final String? remoteWifiIp = data['wifi_ip']?.toString();
+    final String? remoteUsbIp  = data['usb_ip']?.toString();
+
+    // ── Fresh scan of THIS device's WiFi IP ───────────────────────────────
+    String? myWifi;
+    try {
+      final ifaces = await NetworkInterface.list(
+          type: InternetAddressType.IPv4, includeLinkLocal: false);
+      for (final iface in ifaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback && !isUsbIp(addr.address)) {
+            myWifi = addr.address;
+            break;
+          }
+        }
+        if (myWifi != null) break;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _wifiIp = myWifi);
+
+    // ── Pre-flight: verify both devices have the required transport ──────
+    // NOTE: We do NOT compare subnets — hotspots, different DHCP configs,
+    // and bridged networks often have different subnets but can still
+    // connect. The actual WebSocket attempt will verify reachability.
+    if (widget.isUsbMode) {
+      if (_usbPhoneIp == null) {
+        showError('USB tethering is not active on this device.\n'
+            'Enable it in Settings → Hotspot & Tethering → USB Tethering.');
+        return;
+      }
+      if (remoteUsbIp == null && allIps.where(isUsbIp).isEmpty) {
+        showError('The other device has no USB tethering active.\n'
+            'Both devices need USB tethering enabled and the cable connected.');
+        return;
+      }
+    } else if (!widget.isBothMode) {
+      // WiFi mode
+      if (myWifi == null) {
+        showError('Wi-Fi is not connected on this device.\n'
+            'Connect to a Wi-Fi network or hotspot and retry.');
+        return;
+      }
+      // Check other device has a WiFi IP (explicit field, or any non-USB IP)
+      final hasRemoteWifi = remoteWifiIp != null ||
+          allIps.any((a) => !isUsbIp(a));
+      if (!hasRemoteWifi) {
+        showError('The other device has no Wi-Fi connection.\n'
+            'Both devices must be on the same network or hotspot.');
+        return;
+      }
+    } else {
+      // Via Both — need BOTH transports on BOTH devices
+      if (myWifi == null) {
+        showError('Wi-Fi is not connected on this device.\n'
+            'Via Both requires both Wi-Fi and USB active.');
+        return;
+      }
+      final hasRemoteWifi = remoteWifiIp != null ||
+          allIps.any((a) => !isUsbIp(a));
+      if (!hasRemoteWifi) {
+        showError('The other device has no Wi-Fi connection.\n'
+            'Both devices need Wi-Fi for Via Both mode.');
+        return;
+      }
+      if (_usbPhoneIp == null) {
+        showError('USB tethering is not active on this device.\n'
+            'Via Both requires both Wi-Fi and USB active.');
+        return;
+      }
+      if (remoteUsbIp == null && allIps.where(isUsbIp).isEmpty) {
+        showError('The other device has no USB tethering.\n'
+            'Both devices need USB tethering for Via Both.');
+        return;
+      }
+    }
+
+    // ── Filter IPs to only use the selected transport ─────────────────────
+    final List<String> filteredIps;
+    if (widget.isUsbMode) {
+      final usbIps = allIps.where(isUsbIp).toList();
+      if (usbIps.isEmpty) {
+        showError(
+          'The scanned QR has no USB tethering IP.\n'
+          'Make sure the other device also opened "Via USB" or "Via Both".',
+        );
+        return;
+      }
+      filteredIps = usbIps;
+    } else if (!widget.isBothMode) {
+      final wifiIps = allIps.where((a) => !isUsbIp(a)).toList();
+      if (wifiIps.isEmpty) {
+        showError(
+          'The scanned QR has no Wi-Fi IP.\n'
+          'Make sure the other device opened "Via Wi-Fi" or "Via Both".',
+        );
+        return;
+      }
+      filteredIps = wifiIps;
+    } else {
+      filteredIps = allIps; // Both: use everything
+    }
+
+    setState(() => _isConnecting = true);
+
     _connectToFirstReachable(
-      ips: ips,
+      ips: filteredIps,
       port: port is int ? port : int.parse(port.toString()),
       token: token.toString(),
       targetName: data['name']?.toString() ?? 'Device',
-      extraIps: ips,
+      extraIps: filteredIps,
       connectionMode: widget.isBothMode ? 'both' : widget.isUsbMode ? 'usb' : 'wifi',
     );
   }
@@ -219,7 +475,13 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     String connectionMode = 'wifi',
   }) async {
     if (ips.isEmpty) {
-      if (mounted) setState(() => _isConnecting = false);
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+          _scanError = 'No suitable IP found for the selected connection mode.';
+          _scanCooldown = false;
+        });
+      }
       return;
     }
 
@@ -246,7 +508,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     }
 
     // Also complete with false after timeout if nothing worked.
-    Future.delayed(const Duration(seconds: 16)).then((_) {
+    Future.delayed(const Duration(seconds: 8)).then((_) {
       if (!winner.isCompleted) winner.complete(false);
     });
 
@@ -256,14 +518,16 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     if (connected) {
       Navigator.pop(context);
     } else {
-      setState(() => _isConnecting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.redAccent,
-          content: Text(
-              'Failed to connect to $targetName. Check the IP and token.'),
-        ),
-      );
+      final modeHint = connectionMode == 'usb'
+          ? 'Check USB tethering is active on both devices.'
+          : connectionMode == 'wifi'
+              ? 'Check both devices are on the same Wi-Fi network.'
+              : 'Check your USB and/or Wi-Fi connection.';
+      setState(() {
+        _isConnecting = false;
+        _scanError = 'Could not connect to $targetName.\n$modeHint';
+        _scanCooldown = false;
+      });
     }
   }
 
@@ -284,6 +548,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
 
   @override
   void dispose() {
+    _usbPollTimer?.cancel();
     _tabController.dispose();
     _radarController.dispose();
     _ipController.dispose();
@@ -296,11 +561,16 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     final bool hasCamera = Platform.isAndroid || Platform.isIOS;
     final cm = context.watch<ConnectionManager>();
 
+    final String _myMode = widget.isBothMode ? 'both' : widget.isUsbMode ? 'usb' : 'wifi';
+
     final qrData = jsonEncode({
       'ip': _myIp,
       'port': ConnectionManager.serverFixedPort,
       'token': cm.qrToken,
       'name': _myDeviceName,
+      'mode': _myMode,
+      if (_wifiIp != null) 'wifi_ip': _wifiIp,
+      if (_usbPhoneIp != null) 'usb_ip': _usbPhoneIp,
       if (widget.isBothMode && _myAllIps.isNotEmpty) 'ips': _myAllIps,
     });
 
@@ -336,56 +606,37 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
             ),
           ),
           const SizedBox(height: 16),
-          if ((widget.isUsbMode || widget.isBothMode) && Platform.isAndroid)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 8.0,
-              ),
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  minimumSize: const Size.fromHeight(48),
-                ),
-                icon: const Icon(Icons.usb, color: Colors.white),
-                label: const Text(
-                  'Open Tethering Settings',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                onPressed: () async {
-                  // Try explicit tether settings first, which is standard on AOSP
-                  try {
-                    const intent = AndroidIntent(
-                      action: 'android.settings.TETHER_SETTINGS',
-                    );
-                    await intent.launch();
-                  } catch (e) {
-                    // Fallback for custom skins (like Realme UI, MIUI) which might hide it
-                    try {
-                      const fallbackIntent = AndroidIntent(
-                        action: 'android.settings.WIRELESS_SETTINGS',
-                      );
-                      await fallbackIntent.launch();
-                    } catch (_) {
-                      // Do nothing if even wireless settings fail
-                    }
-                  }
-                },
-              ),
-            ),
           if (widget.isUsbMode || widget.isBothMode)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: TextButton.icon(
-                onPressed: _fetchNetworkInfo,
-                icon: const Icon(Icons.refresh, color: Colors.white54),
-                label: const Text(
-                  'Refresh Network',
-                  style: TextStyle(color: Colors.white54),
-                ),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+              child: _buildUsbStatusCard(),
+            ),
+          // ── Inline error banner (visible on all tabs, stays in the sheet) ────
+          if (_scanError != null)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A0A0A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _scanError!,
+                      style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => setState(() { _scanError = null; _scanCooldown = false; }),
+                    child: const Icon(Icons.close_rounded, color: Colors.white38, size: 18),
+                  ),
+                ],
               ),
             ),
           TabBar(
@@ -411,6 +662,109 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildUsbStatusCard() {
+    if (_isUsbConnected) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F2318),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.green.withOpacity(0.3), width: 1),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.usb_rounded, color: Colors.greenAccent, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'USB Tethering Active',
+                    style: TextStyle(
+                      color: Colors.greenAccent,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _usbPeerIp != null
+                        ? 'Computer IP: $_usbPeerIp'
+                        : 'Device IP: $_usbPhoneIp',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.65),
+                      fontSize: 12.5,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: Colors.white38, size: 20),
+              tooltip: 'Refresh',
+              onPressed: _fetchNetworkInfo,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            ),
+          ],
+        ),
+      );
+    }
+    // Not connected — show tethering settings button + refresh
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1565C0),
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.usb_rounded),
+          label: const Text(
+            'Open Tethering Settings',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          onPressed: () async {
+            try {
+              const intent = AndroidIntent(
+                action: 'android.settings.TETHER_SETTINGS',
+              );
+              await intent.launch();
+            } catch (_) {
+              try {
+                const fallbackIntent = AndroidIntent(
+                  action: 'android.settings.WIRELESS_SETTINGS',
+                );
+                await fallbackIntent.launch();
+              } catch (_) {}
+            }
+          },
+        ),
+        TextButton.icon(
+          onPressed: _fetchNetworkInfo,
+          icon: const Icon(Icons.refresh_rounded, color: Colors.white38, size: 18),
+          label: const Text(
+            'Refresh Network',
+            style: TextStyle(color: Colors.white38, fontSize: 13),
+          ),
+        ),
+      ],
     );
   }
 

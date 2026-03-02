@@ -1,11 +1,13 @@
 class RecentFileModel {
   final String name;
+  final String path; // full file path
   final String size;
   final String type;
   final String dateGroup; // 'Today', '1 day ago', etc.
 
   RecentFileModel({
     required this.name,
+    required this.path,
     required this.size,
     required this.type,
     required this.dateGroup,
