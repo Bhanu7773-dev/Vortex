@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/recent_model.dart';
 import '../viewmodels/recent_viewmodel.dart';
-import '../theme/app_theme.dart';
 
 class RecentView extends StatelessWidget {
   const RecentView({Key? key}) : super(key: key);
@@ -13,44 +12,67 @@ class RecentView extends StatelessWidget {
     return ChangeNotifierProvider<RecentViewModel>(
       create: (_) => RecentViewModel(),
       child: Scaffold(
+        backgroundColor: Colors.black,
         appBar: AppBar(
-          title: const Text('Recent'),
+          backgroundColor: Colors.black,
+          title: const Text(
+            'Recent',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
           actions: [
-            IconButton(icon: const Icon(Icons.search), onPressed: () {}),
             IconButton(
-              icon: const Icon(Icons.list_alt),
+              icon: Icon(Icons.search, color: Colors.white.withOpacity(0.8)),
               onPressed: () {},
-            ), // Layout switch
-            IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+            ),
+            IconButton(
+              icon: Icon(Icons.list_alt, color: Colors.white.withOpacity(0.8)),
+              onPressed: () {},
+            ),
+            IconButton(
+              icon: Icon(Icons.more_vert, color: Colors.white.withOpacity(0.8)),
+              onPressed: () {},
+            ),
           ],
         ),
         body: Consumer<RecentViewModel>(
           builder: (context, viewModel, child) {
             if (viewModel.isLoading) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppTheme.accentBlue),
+              return Center(
+                child: CircularProgressIndicator(color: Colors.blue.shade400),
               );
             }
             if (viewModel.sections.isEmpty) {
-              return const Center(
+              return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.history_toggle_off,
-                      size: 80,
-                      color: AppTheme.textGrey,
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Icon(
+                        Icons.history_toggle_off_rounded,
+                        size: 64,
+                        color: Colors.blue.shade300,
+                      ),
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 20),
                     Text(
                       'No recent files',
-                      style: TextStyle(color: AppTheme.textGrey, fontSize: 16),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
-              );
+              ).animate().fadeIn(duration: 500.ms);
             }
             return CustomScrollView(
+              physics: const BouncingScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(
                   child: Padding(
@@ -60,8 +82,8 @@ class RecentView extends StatelessWidget {
                     ),
                     child: Text(
                       viewModel.totalItemsText,
-                      style: const TextStyle(
-                        color: AppTheme.textGrey,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -85,8 +107,7 @@ class RecentView extends StatelessWidget {
                                 crossAxisCount: 3,
                                 crossAxisSpacing: 12.0,
                                 mainAxisSpacing: 16.0,
-                                childAspectRatio:
-                                    0.75, // Taller for the text below
+                                childAspectRatio: 0.75,
                               ),
                           delegate: SliverChildBuilderDelegate((
                             context,
@@ -96,13 +117,11 @@ class RecentView extends StatelessWidget {
                                 .animate(
                                   key: ValueKey('${section.title}_$index'),
                                 )
-                                .fade()
+                                .fadeIn(duration: 400.ms, delay: (50 * index).ms)
                                 .slideY(
                                   begin: 0.1,
                                   end: 0,
                                   duration: 400.ms,
-                                  delay: (50 * index)
-                                      .ms, // Stagger based on grid pos
                                   curve: Curves.easeOut,
                                 );
                           }, childCount: section.files.length),
@@ -133,36 +152,49 @@ class _RecentSectionHeaderDelegate extends SliverPersistentHeaderDelegate {
     bool overlapsContent,
   ) {
     return Container(
-      color: AppTheme
-          .backgroundBlack, // Solid black to mask scrolling items underneath
+      color: Colors.black,
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       alignment: Alignment.centerLeft,
       child: Row(
         children: [
+          Container(
+            width: 3,
+            height: 18,
+            decoration: BoxDecoration(
+              color: Colors.purple.shade400,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
           Text(
             section.title,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(width: 12),
-          Container(width: 1, height: 16, color: Colors.white30),
-          const SizedBox(width: 12),
-          Text(
-            '${section.itemCount} items',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${section.itemCount}',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           const Spacer(),
-          const Icon(
-            Icons.keyboard_arrow_up,
-            color: AppTheme.textGrey,
-            size: 24,
+          Icon(
+            Icons.keyboard_arrow_up_rounded,
+            color: Colors.white.withOpacity(0.4),
+            size: 22,
           ),
         ],
       ),
@@ -195,14 +227,18 @@ class _RecentItemCard extends StatelessWidget {
           child: Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              color: AppTheme.cardGrey,
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.06),
+                width: 1,
+              ),
             ),
-            child: const Center(
+            child: Center(
               child: Icon(
-                Icons.image, // Placeholder icon
-                color: Colors.white24,
-                size: 40,
+                Icons.image_rounded,
+                color: Colors.blue.withOpacity(0.4),
+                size: 36,
               ),
             ),
           ),
@@ -212,7 +248,7 @@ class _RecentItemCard extends StatelessWidget {
           file.name,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 14,
+            fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
           maxLines: 2,
@@ -223,13 +259,19 @@ class _RecentItemCard extends StatelessWidget {
         Center(
           child: Text(
             file.size,
-            style: const TextStyle(color: AppTheme.textGrey, fontSize: 12),
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.4),
+              fontSize: 11,
+            ),
           ),
         ),
         Center(
           child: Text(
             file.type,
-            style: const TextStyle(color: AppTheme.textGrey, fontSize: 12),
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.4),
+              fontSize: 11,
+            ),
           ),
         ),
       ],

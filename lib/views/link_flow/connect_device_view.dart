@@ -25,8 +25,9 @@ class ConnectDeviceView extends StatefulWidget {
 }
 
 class _ConnectDeviceViewState extends State<ConnectDeviceView>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
+  late AnimationController _radarController;
   final TextEditingController _ipController = TextEditingController();
   final TextEditingController _tokenController = TextEditingController();
 
@@ -42,6 +43,10 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
       length: Platform.isAndroid || Platform.isIOS ? 3 : 2,
       vsync: this,
     );
+    _radarController = AnimationController(
+      duration: const Duration(milliseconds: 2500),
+      vsync: this,
+    )..repeat();
     _fetchNetworkInfo();
   }
 
@@ -280,6 +285,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
   @override
   void dispose() {
     _tabController.dispose();
+    _radarController.dispose();
     _ipController.dispose();
     _tokenController.dispose();
     super.dispose();
@@ -463,16 +469,47 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const SizedBox(height: 40),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: QrImageView(
-              data: qrData,
-              version: QrVersions.auto,
-              size: 200.0,
+          // Pulsing radar animation behind QR
+          SizedBox(
+            width: 280,
+            height: 280,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Radar rings
+                AnimatedBuilder(
+                  animation: _radarController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      size: const Size(280, 280),
+                      painter: _RadarPainter(
+                        progress: _radarController.value,
+                        color: Colors.purpleAccent,
+                      ),
+                    );
+                  },
+                ),
+                // QR code container
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.purpleAccent.withOpacity(0.3),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: QrImageView(
+                    data: qrData,
+                    version: QrVersions.auto,
+                    size: 200.0,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
@@ -608,4 +645,42 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
   }
 }
 
+/// Custom painter for pulsing radar rings animation
+class _RadarPainter extends CustomPainter {
+  final double progress;
+  final Color color;
 
+  _RadarPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = size.width / 2;
+
+    // Draw 3 expanding rings at different phases
+    for (int i = 0; i < 3; i++) {
+      final ringProgress = (progress + i / 3) % 1.0;
+      final radius = maxRadius * ringProgress;
+      final opacity = (1.0 - ringProgress) * 0.6;
+
+      if (opacity > 0) {
+        final paint = Paint()
+          ..color = color.withOpacity(opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+
+        canvas.drawCircle(center, radius, paint);
+      }
+    }
+
+    // Draw static center glow
+    final glowPaint = Paint()
+      ..color = color.withOpacity(0.1)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 120, glowPaint);
+  }
+
+  @override
+  bool shouldRepaint(_RadarPainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}

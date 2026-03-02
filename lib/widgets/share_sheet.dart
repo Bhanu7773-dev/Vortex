@@ -2,6 +2,8 @@
 //
 // Public share-sheet widget + helper used by all file views.
 
+import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:vortex/services/connection_manager.dart';
@@ -406,6 +408,32 @@ class TransferProgressDialog extends StatefulWidget {
 
 class _TransferProgressDialogState extends State<TransferProgressDialog> {
   bool _done = false;
+  Timer? _speedTimer;
+  final List<double> _speedHistory = [];
+  static const int _maxSpeedSamples = 30;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sample speed every 200ms for sparkline
+    _speedTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      final job = widget.transferService.activeJob;
+      if (job != null && !job.isComplete && !job.cancelled) {
+        setState(() {
+          _speedHistory.add(job.currentSpeed);
+          if (_speedHistory.length > _maxSpeedSamples) {
+            _speedHistory.removeAt(0);
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _speedTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -510,6 +538,28 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
                       ),
                     ),
                   ],
+                  // Speed sparkline graph
+                  if (_speedHistory.length > 2) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: CustomPaint(
+                          size: const Size(double.infinity, 40),
+                          painter: _SparklinePainter(
+                            data: _speedHistory,
+                            lineColor: AppTheme.accentBlue,
+                            fillColor: AppTheme.accentBlue.withOpacity(0.2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 16),
                 LinearProgressIndicator(
@@ -567,4 +617,77 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
       ),
     );
   }
+}
+/// Custom painter for drawing a sparkline speed graph
+class _SparklinePainter extends CustomPainter {
+  final List<double> data;
+  final Color lineColor;
+  final Color fillColor;
+
+  _SparklinePainter({
+    required this.data,
+    required this.lineColor,
+    required this.fillColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.length < 2) return;
+
+    final maxValue = data.reduce(math.max);
+    if (maxValue == 0) return;
+
+    final path = Path();
+    final fillPath = Path();
+    final stepX = size.width / (data.length - 1);
+
+    for (int i = 0; i < data.length; i++) {
+      final x = i * stepX;
+      final normalizedY = (data[i] / maxValue).clamp(0.0, 1.0);
+      final y = size.height - (normalizedY * (size.height - 4)) - 2;
+
+      if (i == 0) {
+        path.moveTo(x, y);
+        fillPath.moveTo(x, size.height);
+        fillPath.lineTo(x, y);
+      } else {
+        path.lineTo(x, y);
+        fillPath.lineTo(x, y);
+      }
+    }
+
+    // Complete fill path
+    fillPath.lineTo(size.width, size.height);
+    fillPath.close();
+
+    // Draw fill
+    final fillPaint = Paint()
+      ..color = fillColor
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(fillPath, fillPaint);
+
+    // Draw line
+    final linePaint = Paint()
+      ..color = lineColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, linePaint);
+
+    // Draw current speed dot at the end
+    if (data.isNotEmpty) {
+      final lastX = (data.length - 1) * stepX;
+      final lastY = size.height - ((data.last / maxValue).clamp(0.0, 1.0) * (size.height - 4)) - 2;
+      final dotPaint = Paint()
+        ..color = lineColor
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(lastX, lastY), 4, dotPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter oldDelegate) =>
+      oldDelegate.data.length != data.length ||
+      (data.isNotEmpty && oldDelegate.data.isNotEmpty && oldDelegate.data.last != data.last);
 }

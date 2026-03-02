@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:vortex/services/connection_manager.dart';
 import 'package:vortex/services/transfer_service.dart';
@@ -194,6 +195,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
   void _showShareOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: const Color(0xFF1C1C1E),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -208,37 +210,57 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 24),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const Text(
-                'Share Options',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                'Connect & Share',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
-              const SizedBox(height: 16),
-              _buildShareOption(
+              const SizedBox(height: 8),
+              Text(
+                'Choose how to link with another device',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white.withOpacity(0.5),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildAnimatedShareOption(
                 icon: Icons.wifi,
                 label: 'Via Wi-Fi',
-                onTap: () {
-                  Navigator.pop(context); // Close share options
-                  _showConnectDevice(context); // Open QR connect UI (Wi-Fi)
-                },
-              ),
-              _buildShareOption(
-                icon: Icons.usb,
-                label: 'Via USB',
+                subtitle: 'Fast wireless transfer',
+                color: const Color(0xFF4ECDC4),
+                delay: 0,
                 onTap: () {
                   Navigator.pop(context);
-                  _showConnectDevice(
-                    context,
-                    isUsbMode: true,
-                  ); // Open QR connect UI (USB)
+                  _showConnectDevice(context);
                 },
               ),
-              _buildShareOption(
+              const SizedBox(height: 12),
+              _buildAnimatedShareOption(
+                icon: Icons.usb,
+                label: 'Via USB',
+                subtitle: 'Stable wired connection',
+                color: const Color(0xFFFFB347),
+                delay: 80,
+                onTap: () {
+                  Navigator.pop(context);
+                  _showConnectDevice(context, isUsbMode: true);
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildAnimatedShareOption(
                 icon: Icons.sync_alt,
                 label: 'Via Both',
+                subtitle: 'Maximum speed',
+                color: const Color(0xFF9B59B6),
+                delay: 160,
                 onTap: () {
                   Navigator.pop(context);
                   _showConnectDevice(context, isBothMode: true);
@@ -275,23 +297,73 @@ class _MainWrapperViewState extends State<MainWrapperView> {
     );
   }
 
-  Widget _buildShareOption({
+  Widget _buildAnimatedShareOption({
     required IconData icon,
     required String label,
+    required String subtitle,
+    required Color color,
+    required int delay,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: Colors.blue),
-      ),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+    return GestureDetector(
       onTap: onTap,
-    );
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: color.withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: Colors.white.withOpacity(0.3),
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 300.ms, delay: delay.ms).slideX(
+          begin: 0.1,
+          end: 0,
+          duration: 300.ms,
+          delay: delay.ms,
+          curve: Curves.easeOut,
+        );
   }
 }

@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 import '../viewmodels/media_viewmodels.dart';
-import '../theme/app_theme.dart';
 import '../utils/file_opener.dart';
 import '../widgets/share_sheet.dart';
 
@@ -102,9 +101,9 @@ class VideosView extends StatelessWidget {
       create: (_) => VideosViewModel(),
       child: Consumer<VideosViewModel>(
         builder: (context, vm, _) => Scaffold(
-          backgroundColor: AppTheme.backgroundBlack,
+          backgroundColor: Colors.black,
           appBar: AppBar(
-            backgroundColor: AppTheme.backgroundBlack,
+            backgroundColor: Colors.black,
             elevation: 0,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -121,8 +120,8 @@ class VideosView extends StatelessWidget {
             actions: [],
           ),
           body: vm.isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppTheme.accentBlue),
+              ? Center(
+                  child: CircularProgressIndicator(color: Colors.blue.shade400),
                 )
               : vm.albums.isEmpty
               ? _emptyState(Icons.videocam_off_outlined, 'No videos found')
@@ -170,7 +169,7 @@ class VideosView extends StatelessWidget {
                           Text(
                             '${album.count}',
                             style: const TextStyle(
-                              color: AppTheme.textGrey,
+                              color: Colors.white54,
                               fontSize: 12,
                             ),
                           ),
@@ -225,7 +224,7 @@ class VideoAlbumDetailView extends StatelessWidget {
                       Text(
                         '${vm.videos.length} items',
                         style: const TextStyle(
-                          color: AppTheme.textGrey,
+                          color: Colors.white54,
                           fontSize: 12,
                         ),
                       ),
@@ -242,8 +241,8 @@ class VideoAlbumDetailView extends StatelessWidget {
                   ],
                 ),
           body: vm.isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppTheme.accentBlue),
+              ? Center(
+                  child: CircularProgressIndicator(color: Colors.blue.shade400),
                 )
               : vm.videos.isEmpty
               ? _emptyState(Icons.videocam_off_outlined, 'No videos here')
@@ -328,11 +327,11 @@ Widget _emptyState(IconData icon, String label) => Center(
   child: Column(
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
-      Icon(icon, size: 80, color: AppTheme.textGrey),
+      Icon(icon, size: 80, color: Colors.white54),
       const SizedBox(height: 16),
       Text(
         label,
-        style: const TextStyle(color: AppTheme.textGrey, fontSize: 16),
+        style: const TextStyle(color: Colors.white54, fontSize: 16),
       ),
     ],
   ),
@@ -345,7 +344,7 @@ AppBar _selBar(
   VoidCallback onClose,
   VoidCallback onAll,
 ) => AppBar(
-  backgroundColor: AppTheme.cardGrey,
+  backgroundColor: Colors.white.withOpacity(0.05),
   leading: IconButton(
     icon: const Icon(Icons.close, color: Colors.white),
     onPressed: onClose,
@@ -357,10 +356,10 @@ AppBar _selBar(
   actions: [
     TextButton(
       onPressed: onAll,
-      child: const Text(
+      child: Text(
         'Select all',
         style: TextStyle(
-          color: AppTheme.accentBlue,
+          color: Colors.blue.shade400,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -380,14 +379,14 @@ void _deleteDialog(BuildContext context, int count, VoidCallback onConfirm) {
       ),
       content: Text(
         'Permanently delete $count item(s)?',
-        style: const TextStyle(color: AppTheme.textGrey, fontSize: 14),
+        style: const TextStyle(color: Colors.white54, fontSize: 14),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text(
+          child: Text(
             'Cancel',
-            style: TextStyle(color: AppTheme.textGrey),
+            style: TextStyle(color: Colors.white54),
           ),
         ),
         TextButton(
@@ -395,7 +394,7 @@ void _deleteDialog(BuildContext context, int count, VoidCallback onConfirm) {
             Navigator.pop(ctx);
             onConfirm();
           },
-          child: const Text(
+          child: Text(
             'Delete',
             style: TextStyle(
               color: Colors.redAccent,
@@ -425,7 +424,7 @@ class _GridTile extends StatelessWidget {
       foregroundDecoration: isSelected
           ? BoxDecoration(
               color: Colors.black38,
-              border: Border.all(color: AppTheme.accentBlue, width: 2.5),
+              border: Border.all(color: Colors.blue.shade400, width: 2.5),
             )
           : null,
       child: Stack(
@@ -445,12 +444,12 @@ class _GridTile extends StatelessWidget {
                   height: 20,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected ? AppTheme.accentBlue : Colors.black54,
+                    color: isSelected ? Colors.blue.shade400 : Colors.black54,
                     border: Border.all(color: Colors.white, width: 2),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: AppTheme.accentBlue.withOpacity(0.5),
+                              color: Colors.blue.shade400.withOpacity(0.5),
                               blurRadius: 6,
                             ),
                           ]
@@ -481,7 +480,7 @@ class _ActionBar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 64,
     decoration: BoxDecoration(
-      color: AppTheme.cardGrey,
+      color: Colors.white.withOpacity(0.05),
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: Colors.white10),
     ),

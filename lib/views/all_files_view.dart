@@ -5,12 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:vortex/viewmodels/all_files_viewmodel.dart';
 import 'package:vortex/models/file_item_model.dart';
 import 'package:vortex/models/storage_volume_model.dart';
-import 'package:vortex/theme/app_theme.dart';
 import 'package:vortex/widgets/tag_selection_sheet.dart';
 import 'package:vortex/utils/file_opener.dart';
-import 'package:vortex/services/connection_manager.dart';
-
-import 'package:vortex/services/transfer_service.dart';
 import 'package:vortex/widgets/share_sheet.dart';
 
 class AllFilesView extends StatefulWidget {
@@ -75,7 +71,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                             : 'Add ${viewModel.selectedPaths.length} folders',
                       ),
                       icon: const Icon(Icons.check),
-                      backgroundColor: AppTheme.accentBlue,
+                      backgroundColor: Colors.blue.shade400,
                     )
                   : null,
               appBar: PreferredSize(
@@ -85,10 +81,10 @@ class _AllFilesViewState extends State<AllFilesView> {
                         leadingWidth: 80,
                         leading: TextButton(
                           onPressed: () => viewModel.toggleSelectionMode(),
-                          child: const Text(
+                          child: Text(
                             'Cancel',
                             style: TextStyle(
-                              color: AppTheme.accentBlue,
+                              color: Colors.blue.shade400,
                               fontSize: 16,
                             ),
                           ),
@@ -100,10 +96,10 @@ class _AllFilesViewState extends State<AllFilesView> {
                         actions: [
                           TextButton(
                             onPressed: () => viewModel.selectAll(),
-                            child: const Text(
+                            child: Text(
                               'Select all',
                               style: TextStyle(
-                                color: AppTheme.accentBlue,
+                                color: Colors.blue.shade400,
                                 fontSize: 16,
                               ),
                             ),
@@ -173,7 +169,12 @@ class _AllFilesViewState extends State<AllFilesView> {
                                 color: Colors.white,
                               ),
                               tooltip: 'Switch Storage',
-                              color: AppTheme.cardGrey,
+                              color: const Color(0xFF1C1C1E),
+                              position: PopupMenuPosition.under,
+                              popUpAnimationStyle: AnimationStyle(
+                                curve: Curves.easeOut,
+                                duration: Duration(milliseconds: 180),
+                              ),
                               onSelected: (vol) => viewModel.switchStorage(vol),
                               itemBuilder: (context) =>
                                   viewModel.availableVolumes.map((vol) {
@@ -188,7 +189,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                                                 ? Icons.phone_android
                                                 : Icons.sd_card,
                                             color: isSelected
-                                                ? AppTheme.accentBlue
+                                                ? Colors.blue.shade400
                                                 : Colors.white,
                                             size: 20,
                                           ),
@@ -197,7 +198,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                                             vol.name,
                                             style: TextStyle(
                                               color: isSelected
-                                                  ? AppTheme.accentBlue
+                                                  ? Colors.blue.shade400
                                                   : Colors.white,
                                               fontWeight: isSelected
                                                   ? FontWeight.bold
@@ -206,9 +207,9 @@ class _AllFilesViewState extends State<AllFilesView> {
                                           ),
                                           if (isSelected) ...[
                                             const SizedBox(width: 8),
-                                            const Icon(
+                                            Icon(
                                               Icons.check,
-                                              color: AppTheme.accentBlue,
+                                              color: Colors.blue.shade400,
                                               size: 16,
                                             ),
                                           ],
@@ -219,7 +220,12 @@ class _AllFilesViewState extends State<AllFilesView> {
                             ),
                           PopupMenuButton<String>(
                             icon: const Icon(Icons.add),
-                            color: AppTheme.cardGrey,
+                            color: const Color(0xFF1C1C1E),
+                            position: PopupMenuPosition.under,
+                            popUpAnimationStyle: AnimationStyle(
+                              curve: Curves.easeOut,
+                              duration: Duration(milliseconds: 180),
+                            ),
                             itemBuilder: (context) => [
                               const PopupMenuItem(
                                 value: 'new_folder',
@@ -249,7 +255,12 @@ class _AllFilesViewState extends State<AllFilesView> {
                           ),
                           PopupMenuButton<String>(
                             icon: const Icon(Icons.more_vert),
-                            color: AppTheme.cardGrey,
+                            color: const Color(0xFF1C1C1E),
+                            position: PopupMenuPosition.under,
+                            popUpAnimationStyle: AnimationStyle(
+                              curve: Curves.easeOut,
+                              duration: Duration(milliseconds: 180),
+                            ),
                             itemBuilder: (context) => [
                               PopupMenuItem(
                                 value: 'grid_view',
@@ -264,13 +275,6 @@ class _AllFilesViewState extends State<AllFilesView> {
                                 value: 'edit',
                                 child: Text(
                                   'Edit',
-                                  style: TextStyle(color: Colors.white),
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'settings',
-                                child: Text(
-                                  'Settings',
                                   style: TextStyle(color: Colors.white),
                                 ),
                               ),
@@ -302,19 +306,19 @@ class _AllFilesViewState extends State<AllFilesView> {
                           child: Row(
                             children: [
                               if (viewModel.isSearchLoading)
-                                const SizedBox(
+                                SizedBox(
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: AppTheme.accentBlue,
+                                    color: Colors.blue.shade400,
                                   ),
                                 )
                               else
                                 Icon(
                                   Icons.search,
                                   size: 16,
-                                  color: AppTheme.textGrey,
+                                  color: Colors.white54,
                                 ),
                               const SizedBox(width: 8),
                               Text(
@@ -322,7 +326,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                                     ? 'Searching…  ${results.length} found'
                                     : '${results.length} results for "${viewModel.searchQuery}"',
                                 style: const TextStyle(
-                                  color: AppTheme.textGrey,
+                                  color: Colors.white54,
                                   fontSize: 13,
                                 ),
                               ),
@@ -338,13 +342,13 @@ class _AllFilesViewState extends State<AllFilesView> {
                                   const Icon(
                                     Icons.search_off,
                                     size: 70,
-                                    color: AppTheme.textGrey,
+                                    color: Colors.white54,
                                   ),
                                   const SizedBox(height: 14),
                                   Text(
                                     'No results for "${viewModel.searchQuery}"',
                                     style: const TextStyle(
-                                      color: AppTheme.textGrey,
+                                      color: Colors.white54,
                                       fontSize: 15,
                                     ),
                                   ),
@@ -369,9 +373,9 @@ class _AllFilesViewState extends State<AllFilesView> {
 
                   // ── Normal browse mode ──
                   if (viewModel.isLoading) {
-                    return const Center(
+                    return Center(
                       child: CircularProgressIndicator(
-                        color: AppTheme.accentBlue,
+                        color: Colors.blue.shade400,
                       ),
                     );
                   }
@@ -384,13 +388,13 @@ class _AllFilesViewState extends State<AllFilesView> {
                           Icon(
                             Icons.folder_off_outlined,
                             size: 80,
-                            color: AppTheme.textGrey,
+                            color: Colors.white54,
                           ),
                           SizedBox(height: 16),
                           Text(
                             'This folder is empty',
                             style: TextStyle(
-                              color: AppTheme.textGrey,
+                              color: Colors.white54,
                               fontSize: 16,
                             ),
                           ),
@@ -490,8 +494,8 @@ class _AllFilesViewState extends State<AllFilesView> {
               padding: const EdgeInsets.only(bottom: 16.0),
               child: Text(
                 viewModel.displayPath,
-                style: const TextStyle(
-                  color: AppTheme.accentBlue,
+                style: TextStyle(
+                  color: Colors.blue.shade400,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -503,12 +507,17 @@ class _AllFilesViewState extends State<AllFilesView> {
                 Text(
                   viewModel.itemCountString,
                   style: const TextStyle(
-                    color: AppTheme.textGrey,
+                    color: Colors.white54,
                     fontSize: 14,
                   ),
                 ),
                 PopupMenuButton<SortOption>(
-                  color: AppTheme.cardGrey,
+                  color: const Color(0xFF1C1C1E),
+                  position: PopupMenuPosition.under,
+                  popUpAnimationStyle: AnimationStyle(
+                    curve: Curves.easeOut,
+                    duration: Duration(milliseconds: 180),
+                  ),
                   onSelected: (option) {
                     viewModel.setSortOption(option);
                   },
@@ -530,7 +539,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                               textMapping[option]!,
                               style: TextStyle(
                                 color: isSelected
-                                    ? AppTheme.accentBlue
+                                    ? Colors.blue.shade400
                                     : Colors.white,
                               ),
                             ),
@@ -539,7 +548,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                                 viewModel.isDescending
                                     ? Icons.arrow_downward
                                     : Icons.arrow_upward,
-                                color: AppTheme.accentBlue,
+                                color: Colors.blue.shade400,
                                 size: 16,
                               ),
                           ],
@@ -603,7 +612,7 @@ class _AllFilesViewState extends State<AllFilesView> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              backgroundColor: AppTheme.cardGrey,
+              backgroundColor: const Color(0xFF1C1C1E),
               title: Text(
                 'New $typeName',
                 style: const TextStyle(color: Colors.white),
@@ -611,17 +620,17 @@ class _AllFilesViewState extends State<AllFilesView> {
               content: TextField(
                 controller: _controller,
                 autofocus: true,
-                cursorColor: AppTheme.accentBlue,
+                cursorColor: Colors.blue.shade400,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   hintText: 'Enter $typeName name',
-                  hintStyle: const TextStyle(color: AppTheme.textGrey),
+                  hintStyle: const TextStyle(color: Colors.white54),
                   errorText: errorMessage,
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppTheme.accentBlue),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blue.shade400),
                   ),
-                  focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppTheme.accentBlue),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.blue.shade400),
                   ),
                 ),
               ),
@@ -630,7 +639,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
                     'Cancel',
-                    style: TextStyle(color: AppTheme.textGrey),
+                    style: TextStyle(color: Colors.white54),
                   ),
                 ),
                 TextButton(
@@ -657,9 +666,9 @@ class _AllFilesViewState extends State<AllFilesView> {
                       });
                     }
                   },
-                  child: const Text(
+                  child: Text(
                     'Create',
-                    style: TextStyle(color: AppTheme.accentBlue),
+                    style: TextStyle(color: Colors.blue.shade400),
                   ),
                 ),
               ],
@@ -672,7 +681,7 @@ class _AllFilesViewState extends State<AllFilesView> {
 
   Widget _buildPasteNavBar(BuildContext context, AllFilesViewModel viewModel) {
     return BottomNavigationBar(
-      backgroundColor: AppTheme.cardGrey,
+      backgroundColor: const Color(0xFF1C1C1E),
       selectedItemColor: Colors.white,
       unselectedItemColor: Colors.white,
       showUnselectedLabels: true,
@@ -721,7 +730,7 @@ class _AllFilesViewState extends State<AllFilesView> {
     AllFilesViewModel viewModel,
   ) {
     return BottomNavigationBar(
-      backgroundColor: AppTheme.cardGrey,
+      backgroundColor: const Color(0xFF1C1C1E),
       selectedItemColor: Colors.white,
       unselectedItemColor: Colors.white,
       showUnselectedLabels: true,
@@ -789,21 +798,21 @@ class _AllFilesViewState extends State<AllFilesView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardGrey,
+        backgroundColor: const Color(0xFF1C1C1E),
         title: const Text(
           'Delete Files?',
           style: TextStyle(color: Colors.white),
         ),
         content: Text(
           'Are you sure you want to permanently delete ${viewModel.selectedPaths.length} item(s)? This action cannot be undone.',
-          style: const TextStyle(color: AppTheme.textGrey, fontSize: 14),
+          style: const TextStyle(color: Colors.white54, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text(
               'Cancel',
-              style: TextStyle(color: AppTheme.textGrey),
+              style: TextStyle(color: Colors.white54),
             ),
           ),
           TextButton(
@@ -821,7 +830,7 @@ class _AllFilesViewState extends State<AllFilesView> {
   void _showMoreBottomSheet(BuildContext context, AllFilesViewModel viewModel) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppTheme.cardGrey,
+      backgroundColor: const Color(0xFF1C1C1E),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -875,20 +884,20 @@ class _AllFilesViewState extends State<AllFilesView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardGrey,
+        backgroundColor: const Color(0xFF1C1C1E),
         title: const Text('Rename', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: textController,
           autofocus: true,
           style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: 'New name',
-            hintStyle: TextStyle(color: AppTheme.textGrey),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppTheme.textGrey),
+            hintStyle: const TextStyle(color: Colors.white54),
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white54),
             ),
             focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppTheme.accentBlue),
+              borderSide: BorderSide(color: Colors.blue.shade400),
             ),
           ),
         ),
@@ -897,7 +906,7 @@ class _AllFilesViewState extends State<AllFilesView> {
             onPressed: () => Navigator.pop(ctx),
             child: const Text(
               'Cancel',
-              style: TextStyle(color: AppTheme.textGrey),
+              style: TextStyle(color: Colors.white54),
             ),
           ),
           TextButton(
@@ -915,9 +924,9 @@ class _AllFilesViewState extends State<AllFilesView> {
                 Navigator.pop(ctx);
               }
             },
-            child: const Text(
+            child: Text(
               'Ok',
-              style: TextStyle(color: AppTheme.accentBlue),
+              style: TextStyle(color: Colors.blue.shade400),
             ),
           ),
         ],
@@ -935,7 +944,7 @@ class _AllFilesViewState extends State<AllFilesView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.cardGrey,
+        backgroundColor: const Color(0xFF1C1C1E),
         title: const Text('Details', style: TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
           child: Column(
@@ -950,7 +959,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                     Text(
                       e.key,
                       style: const TextStyle(
-                        color: AppTheme.textGrey,
+                        color: Colors.white54,
                         fontSize: 13,
                       ),
                     ),
@@ -968,9 +977,9 @@ class _AllFilesViewState extends State<AllFilesView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
+            child: Text(
               'Ok',
-              style: TextStyle(color: AppTheme.accentBlue),
+              style: TextStyle(color: Colors.blue.shade400),
             ),
           ),
         ],
@@ -1012,7 +1021,7 @@ class _FileListItem extends StatelessWidget {
         }
       },
       child: Container(
-        color: isSelected ? AppTheme.cardGrey : Colors.transparent,
+        color: isSelected ? Colors.white.withOpacity(0.05) : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Row(
           children: [
@@ -1036,7 +1045,7 @@ class _FileListItem extends StatelessWidget {
                   Text(
                     '$countStr  |  $dateStr',
                     style: const TextStyle(
-                      color: AppTheme.textGrey,
+                      color: Colors.white54,
                       fontSize: 13,
                     ),
                   ),
@@ -1047,12 +1056,12 @@ class _FileListItem extends StatelessWidget {
                 (viewModel.isFolderPickerMode && item.isDirectory))
               Icon(
                 isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-                color: isSelected ? AppTheme.accentBlue : AppTheme.textGrey,
+                color: isSelected ? Colors.blue.shade400 : Colors.white54,
               )
             else
               const Icon(
                 Icons.chevron_right,
-                color: AppTheme.textGrey,
+                color: Colors.white54,
                 size: 20,
               ),
           ],
@@ -1064,7 +1073,7 @@ class _FileListItem extends StatelessWidget {
   Widget _buildIcon() {
     // Generate the blue folder icon like the screenshot
     IconData centerIcon = Icons.folder;
-    Color iconColor = AppTheme.accentBlue; // Light cyan/blue folder
+    Color iconColor = Colors.blue.shade400; // Light cyan/blue folder
 
     if (item.categoryHint == 'download') {
       // centerIcon = Icons.download_rounded; // Removed custom icon
@@ -1114,10 +1123,10 @@ class _FileGridItem extends StatelessWidget {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.cardGrey : Colors.transparent,
+          color: isSelected ? Colors.white.withOpacity(0.05) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: isSelected
-              ? Border.all(color: AppTheme.accentBlue, width: 2)
+              ? Border.all(color: Colors.blue.shade400, width: 2)
               : null,
         ),
         child: Stack(
@@ -1149,7 +1158,7 @@ class _FileGridItem extends StatelessWidget {
                     Text(
                       countStr,
                       style: const TextStyle(
-                        color: AppTheme.textGrey,
+                        color: Colors.white54,
                         fontSize: 12,
                       ),
                     ),
@@ -1160,8 +1169,8 @@ class _FileGridItem extends StatelessWidget {
                             ? Icons.check_box
                             : Icons.check_box_outline_blank,
                         color: isSelected
-                            ? AppTheme.accentBlue
-                            : AppTheme.textGrey,
+                            ? Colors.blue.shade400
+                            : Colors.white54,
                         size: 18,
                       ),
                     ],
@@ -1175,7 +1184,7 @@ class _FileGridItem extends StatelessWidget {
                 right: 4,
                 child: Icon(
                   isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-                  color: isSelected ? AppTheme.accentBlue : AppTheme.textGrey,
+                  color: isSelected ? Colors.blue.shade400 : Colors.white54,
                   size: 20,
                 ),
               ),
@@ -1187,7 +1196,7 @@ class _FileGridItem extends StatelessWidget {
 
   Widget _buildIcon() {
     IconData centerIcon = Icons.folder;
-    Color iconColor = AppTheme.accentBlue;
+    Color iconColor = Colors.blue.shade400;
 
     if (!item.isDirectory) {
       centerIcon = Icons.insert_drive_file;
@@ -1207,7 +1216,7 @@ class PasteProgressDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: AppTheme.cardGrey,
+      backgroundColor: const Color(0xFF1C1C1E),
       title: const Text('Pasting Files', style: TextStyle(color: Colors.white)),
       content: ListenableBuilder(
         listenable: viewModel,
@@ -1218,7 +1227,7 @@ class PasteProgressDialog extends StatelessWidget {
             children: [
               Text(
                 viewModel.pasteStatus,
-                style: const TextStyle(color: AppTheme.textGrey, fontSize: 13),
+                style: const TextStyle(color: Colors.white54, fontSize: 13),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -1228,8 +1237,8 @@ class PasteProgressDialog extends StatelessWidget {
                     ? viewModel.pasteProgress
                     : null,
                 backgroundColor: Colors.black,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  AppTheme.accentBlue,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  Colors.blue.shade400,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1251,7 +1260,7 @@ class PasteProgressDialog extends StatelessWidget {
           },
           child: const Text(
             'Cancel',
-            style: TextStyle(color: AppTheme.textGrey),
+            style: TextStyle(color: Colors.white54),
           ),
         ),
       ],

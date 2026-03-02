@@ -83,6 +83,7 @@ class TransferJob {
 
   double get progress =>
       totalBytes == 0 ? 0.0 : (sentBytes / totalBytes).clamp(0.0, 1.0);
+  double get currentSpeed => _speed.bytesPerSec;
   String get speedText => _fmtSpeed(_speed.bytesPerSec);
   String get sentText => _fmtBytes(sentBytes);
   String get totalText => _fmtBytes(totalBytes);

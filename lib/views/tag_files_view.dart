@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/file_item_model.dart';
 import '../services/persistence_service.dart';
-import '../theme/app_theme.dart';
 
 class TagFilesView extends StatefulWidget {
   final String tagName;
@@ -72,7 +71,7 @@ class _TagFilesViewState extends State<TagFilesView> {
           ? const Center(
               child: Text(
                 'No items in this tag',
-                style: TextStyle(color: AppTheme.textGrey),
+                style: TextStyle(color: Colors.white54),
               ),
             )
           : ListView.builder(
@@ -82,7 +81,7 @@ class _TagFilesViewState extends State<TagFilesView> {
                 return ListTile(
                   leading: Icon(
                     item.isDirectory ? Icons.folder : Icons.insert_drive_file,
-                    color: item.isDirectory ? AppTheme.accentBlue : Colors.grey,
+                    color: item.isDirectory ? Colors.blue.shade400 : Colors.grey,
                   ),
                   title: Text(
                     item.name,
@@ -90,7 +89,7 @@ class _TagFilesViewState extends State<TagFilesView> {
                   ),
                   subtitle: Text(
                     item.isDirectory ? '${item.itemCount} items' : 'File',
-                    style: const TextStyle(color: AppTheme.textGrey),
+                    style: const TextStyle(color: Colors.white54),
                   ),
                 );
               },

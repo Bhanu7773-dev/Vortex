@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import '../widgets/share_sheet.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/photos_viewmodel.dart';
-import '../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────
 //  Photos - Album Grid screen
@@ -20,9 +19,9 @@ class PhotosView extends StatelessWidget {
       child: Consumer<PhotosViewModel>(
         builder: (context, viewModel, _) {
           return Scaffold(
-            backgroundColor: AppTheme.backgroundBlack,
+            backgroundColor: Colors.black,
             appBar: AppBar(
-              backgroundColor: AppTheme.backgroundBlack,
+              backgroundColor: Colors.black,
               elevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -39,26 +38,26 @@ class PhotosView extends StatelessWidget {
               actions: [],
             ),
             body: viewModel.isLoading
-                ? const Center(
+                ? Center(
                     child: CircularProgressIndicator(
-                      color: AppTheme.accentBlue,
+                      color: Colors.blue.shade400,
                     ),
                   )
                 : viewModel.albums.isEmpty
-                ? const Center(
+                ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           Icons.image_not_supported_outlined,
                           size: 80,
-                          color: AppTheme.textGrey,
+                          color: Colors.white54,
                         ),
                         SizedBox(height: 16),
                         Text(
                           'No photos found',
                           style: TextStyle(
-                            color: AppTheme.textGrey,
+                            color: Colors.white54,
                             fontSize: 16,
                           ),
                         ),
@@ -116,10 +115,10 @@ class _AlbumCard extends StatelessWidget {
                 width: double.infinity,
                 cacheWidth: 300,
                 errorBuilder: (_, __, ___) => Container(
-                  color: AppTheme.cardGrey,
+                  color: Colors.white.withOpacity(0.05),
                   child: const Icon(
                     Icons.broken_image,
-                    color: AppTheme.textGrey,
+                    color: Colors.white54,
                   ),
                 ),
               ),
@@ -138,7 +137,7 @@ class _AlbumCard extends StatelessWidget {
           ),
           Text(
             '${album.count}',
-            style: const TextStyle(color: AppTheme.textGrey, fontSize: 12),
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
           ),
         ],
       ),
@@ -164,26 +163,26 @@ class PhotoAlbumDetailView extends StatelessWidget {
             extendBodyBehindAppBar: vm.isSelectionMode,
             appBar: _buildAppBar(context, vm),
             body: vm.isLoading
-                ? const Center(
+                ? Center(
                     child: CircularProgressIndicator(
-                      color: AppTheme.accentBlue,
+                      color: Colors.blue.shade400,
                     ),
                   )
                 : vm.photos.isEmpty
-                ? const Center(
+                ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           Icons.image_not_supported_outlined,
                           size: 80,
-                          color: AppTheme.textGrey,
+                          color: Colors.white54,
                         ),
                         SizedBox(height: 16),
                         Text(
                           'No photos here',
                           style: TextStyle(
-                            color: AppTheme.textGrey,
+                            color: Colors.white54,
                             fontSize: 16,
                           ),
                         ),
@@ -296,10 +295,10 @@ class PhotoAlbumDetailView extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: vm.selectAll,
-            child: const Text(
+            child: Text(
               'Select all',
               style: TextStyle(
-                color: AppTheme.accentBlue,
+                color: Colors.blue.shade400,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -327,7 +326,7 @@ class PhotoAlbumDetailView extends StatelessWidget {
           ),
           Text(
             '${album.count} items',
-            style: const TextStyle(color: AppTheme.textGrey, fontSize: 12),
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
           ),
         ],
       ),
@@ -360,7 +359,7 @@ class _PhotoTile extends StatelessWidget {
       foregroundDecoration: isSelected
           ? BoxDecoration(
               color: Colors.black38,
-              border: Border.all(color: AppTheme.accentBlue, width: 2.5),
+              border: Border.all(color: Colors.blue.shade400, width: 2.5),
             )
           : null,
       child: Stack(
@@ -371,10 +370,10 @@ class _PhotoTile extends StatelessWidget {
             fit: BoxFit.cover,
             cacheWidth: 180,
             errorBuilder: (_, __, ___) => Container(
-              color: AppTheme.cardGrey,
+              color: Colors.white.withOpacity(0.05),
               child: const Icon(
                 Icons.broken_image,
-                color: AppTheme.textGrey,
+                color: Colors.white54,
                 size: 16,
               ),
             ),
@@ -393,16 +392,16 @@ class _PhotoTile extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: isSelected
-                        ? AppTheme.accentBlue
+                        ? Colors.blue.shade400
                         : Colors.black.withOpacity(0.35),
                     border: Border.all(
-                      color: isSelected ? AppTheme.accentBlue : Colors.white,
+                      color: isSelected ? Colors.blue.shade400 : Colors.white,
                       width: 2,
                     ),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: AppTheme.accentBlue.withOpacity(0.5),
+                              color: Colors.blue.shade400.withOpacity(0.5),
                               blurRadius: 8,
                             ),
                           ]
@@ -435,7 +434,7 @@ class _PremiumSelectionBar extends StatelessWidget {
     return Container(
       height: 64,
       decoration: BoxDecoration(
-        color: AppTheme.cardGrey,
+        color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white10, width: 1),
       ),
@@ -478,14 +477,14 @@ class _PremiumSelectionBar extends StatelessWidget {
         ),
         content: Text(
           'Permanently delete ${vm.selectedPaths.length} photo(s)? This cannot be undone.',
-          style: const TextStyle(color: AppTheme.textGrey, fontSize: 14),
+          style: const TextStyle(color: Colors.white54, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialog),
-            child: const Text(
+            child: Text(
               'Cancel',
-              style: TextStyle(color: AppTheme.textGrey),
+              style: TextStyle(color: Colors.white54),
             ),
           ),
           TextButton(
@@ -493,7 +492,7 @@ class _PremiumSelectionBar extends StatelessWidget {
               Navigator.pop(dialog);
               vm.deleteSelected();
             },
-            child: const Text(
+            child: Text(
               'Delete',
               style: TextStyle(
                 color: Colors.redAccent,
@@ -803,7 +802,7 @@ class _PhotoFullScreenViewState extends State<_PhotoFullScreenView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
+            child: Text(
               'Cancel',
               style: TextStyle(color: Colors.white54),
             ),
@@ -817,7 +816,7 @@ class _PhotoFullScreenViewState extends State<_PhotoFullScreenView> {
               } catch (_) {}
               if (context.mounted) Navigator.pop(context);
             },
-            child: const Text(
+            child: Text(
               'Delete',
               style: TextStyle(
                 color: Colors.redAccent,

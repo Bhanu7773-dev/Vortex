@@ -3,7 +3,6 @@ import '../widgets/share_sheet.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/media_viewmodels.dart';
-import '../theme/app_theme.dart';
 import '../utils/file_opener.dart';
 
 // ══════════════════════════════════════════════
@@ -44,11 +43,11 @@ class _AudioViewState extends State<AudioView> {
       create: (_) => MediaListViewModel(_exts),
       child: Consumer<MediaListViewModel>(
         builder: (context, vm, _) => Scaffold(
-          backgroundColor: AppTheme.backgroundBlack,
+          backgroundColor: Colors.black,
           appBar: _buildAppBar(context, vm),
           body: vm.isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppTheme.accentBlue),
+              ? Center(
+                  child: CircularProgressIndicator(color: Colors.blue.shade400),
                 )
               : Column(
                   children: [
@@ -126,7 +125,7 @@ class _AudioViewState extends State<AudioView> {
   ) {
     if (vm.isSelectionMode) {
       return AppBar(
-        backgroundColor: AppTheme.cardGrey,
+        backgroundColor: Colors.white.withOpacity(0.05),
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: vm.cancelSelection,
@@ -141,10 +140,10 @@ class _AudioViewState extends State<AudioView> {
         actions: [
           TextButton(
             onPressed: vm.selectAll,
-            child: const Text(
+            child: Text(
               'Select all',
               style: TextStyle(
-                color: AppTheme.accentBlue,
+                color: Colors.blue.shade400,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -154,7 +153,7 @@ class _AudioViewState extends State<AudioView> {
     }
     if (_searching) {
       return AppBar(
-        backgroundColor: AppTheme.backgroundBlack,
+        backgroundColor: Colors.black,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -192,7 +191,7 @@ class _AudioViewState extends State<AudioView> {
       );
     }
     return AppBar(
-      backgroundColor: AppTheme.backgroundBlack,
+      backgroundColor: Colors.black,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -263,11 +262,11 @@ class _ArchivesViewState extends State<ArchivesView> {
       create: (_) => MediaListViewModel(_exts),
       child: Consumer<MediaListViewModel>(
         builder: (context, vm, _) => Scaffold(
-          backgroundColor: AppTheme.backgroundBlack,
+          backgroundColor: Colors.black,
           appBar: _buildAppBar(context, vm),
           body: vm.isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppTheme.accentBlue),
+              ? Center(
+                  child: CircularProgressIndicator(color: Colors.blue.shade400),
                 )
               : Column(
                   children: [
@@ -311,7 +310,7 @@ class _ArchivesViewState extends State<ArchivesView> {
                               subtitleMaxLines: 2,
                               iconBuilder: (item) {
                                 final c =
-                                    _colors[item.ext] ?? AppTheme.textGrey;
+                                    _colors[item.ext] ?? Colors.white54;
                                 return _ArchiveIcon(ext: item.ext, color: c);
                               },
                             ),
@@ -346,7 +345,7 @@ class _ArchivesViewState extends State<ArchivesView> {
   ) {
     if (vm.isSelectionMode) {
       return AppBar(
-        backgroundColor: AppTheme.cardGrey,
+        backgroundColor: Colors.white.withOpacity(0.05),
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: vm.cancelSelection,
@@ -361,10 +360,10 @@ class _ArchivesViewState extends State<ArchivesView> {
         actions: [
           TextButton(
             onPressed: vm.selectAll,
-            child: const Text(
+            child: Text(
               'Select all',
               style: TextStyle(
-                color: AppTheme.accentBlue,
+                color: Colors.blue.shade400,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -374,7 +373,7 @@ class _ArchivesViewState extends State<ArchivesView> {
     }
     if (_searching) {
       return AppBar(
-        backgroundColor: AppTheme.backgroundBlack,
+        backgroundColor: Colors.black,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -412,7 +411,7 @@ class _ArchivesViewState extends State<ArchivesView> {
       );
     }
     return AppBar(
-      backgroundColor: AppTheme.backgroundBlack,
+      backgroundColor: Colors.black,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -464,11 +463,11 @@ class _ApksViewState extends State<ApksView> {
       create: (_) => MediaListViewModel(_exts),
       child: Consumer<MediaListViewModel>(
         builder: (context, vm, _) => Scaffold(
-          backgroundColor: AppTheme.backgroundBlack,
+          backgroundColor: Colors.black,
           appBar: _buildAppBar(context, vm),
           body: vm.isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppTheme.accentBlue),
+              ? Center(
+                  child: CircularProgressIndicator(color: Colors.blue.shade400),
                 )
               : Column(
                   children: [
@@ -526,7 +525,7 @@ class _ApksViewState extends State<ApksView> {
                                           color: Colors.green.withOpacity(0.4),
                                         ),
                                       ),
-                                      child: const Text(
+                                      child: Text(
                                         'INSTALL',
                                         style: TextStyle(
                                           color: Colors.green,
@@ -567,7 +566,7 @@ class _ApksViewState extends State<ApksView> {
   ) {
     if (vm.isSelectionMode) {
       return AppBar(
-        backgroundColor: AppTheme.cardGrey,
+        backgroundColor: Colors.white.withOpacity(0.05),
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: vm.cancelSelection,
@@ -582,10 +581,10 @@ class _ApksViewState extends State<ApksView> {
         actions: [
           TextButton(
             onPressed: vm.selectAll,
-            child: const Text(
+            child: Text(
               'Select all',
               style: TextStyle(
-                color: AppTheme.accentBlue,
+                color: Colors.blue.shade400,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -595,7 +594,7 @@ class _ApksViewState extends State<ApksView> {
     }
     if (_searching) {
       return AppBar(
-        backgroundColor: AppTheme.backgroundBlack,
+        backgroundColor: Colors.black,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -633,7 +632,7 @@ class _ApksViewState extends State<ApksView> {
       );
     }
     return AppBar(
-      backgroundColor: AppTheme.backgroundBlack,
+      backgroundColor: Colors.black,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -724,11 +723,11 @@ class _DocumentsViewState extends State<DocumentsView> {
       create: (_) => MediaListViewModel(_exts),
       child: Consumer<MediaListViewModel>(
         builder: (context, vm, _) => Scaffold(
-          backgroundColor: AppTheme.backgroundBlack,
+          backgroundColor: Colors.black,
           appBar: _buildAppBar(context, vm),
           body: vm.isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppTheme.accentBlue),
+              ? Center(
+                  child: CircularProgressIndicator(color: Colors.blue.shade400),
                 )
               : Column(
                   children: [
@@ -774,7 +773,7 @@ class _DocumentsViewState extends State<DocumentsView> {
                               subtitleMaxLines: 2,
                               iconBuilder: (item) {
                                 final c =
-                                    _colors[item.ext] ?? AppTheme.textGrey;
+                                    _colors[item.ext] ?? Colors.white54;
                                 return _Icon(
                                   color: c,
                                   bg: c.withOpacity(0.12),
@@ -815,7 +814,7 @@ class _DocumentsViewState extends State<DocumentsView> {
   ) {
     if (vm.isSelectionMode) {
       return AppBar(
-        backgroundColor: AppTheme.cardGrey,
+        backgroundColor: Colors.white.withOpacity(0.05),
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: vm.cancelSelection,
@@ -830,10 +829,10 @@ class _DocumentsViewState extends State<DocumentsView> {
         actions: [
           TextButton(
             onPressed: vm.selectAll,
-            child: const Text(
+            child: Text(
               'Select all',
               style: TextStyle(
-                color: AppTheme.accentBlue,
+                color: Colors.blue.shade400,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -843,7 +842,7 @@ class _DocumentsViewState extends State<DocumentsView> {
     }
     if (_searching) {
       return AppBar(
-        backgroundColor: AppTheme.backgroundBlack,
+        backgroundColor: Colors.black,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -881,7 +880,7 @@ class _DocumentsViewState extends State<DocumentsView> {
       );
     }
     return AppBar(
-      backgroundColor: AppTheme.backgroundBlack,
+      backgroundColor: Colors.black,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -925,14 +924,14 @@ void _showDeleteDialog(
       ),
       content: Text(
         'Permanently delete $count item(s)?',
-        style: const TextStyle(color: AppTheme.textGrey, fontSize: 14),
+        style: const TextStyle(color: Colors.white54, fontSize: 14),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text(
+          child: Text(
             'Cancel',
-            style: TextStyle(color: AppTheme.textGrey),
+            style: TextStyle(color: Colors.white54),
           ),
         ),
         TextButton(
@@ -940,7 +939,7 @@ void _showDeleteDialog(
             Navigator.pop(ctx);
             onConfirm();
           },
-          child: const Text(
+          child: Text(
             'Delete',
             style: TextStyle(
               color: Colors.redAccent,
@@ -983,7 +982,7 @@ class _FilterBar extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: on ? AppTheme.accentBlue : Colors.transparent,
+                    color: on ? Colors.blue.shade400 : Colors.transparent,
                     width: 2,
                   ),
                 ),
@@ -992,7 +991,7 @@ class _FilterBar extends StatelessWidget {
               child: Text(
                 f,
                 style: TextStyle(
-                  color: on ? AppTheme.accentBlue : AppTheme.textGrey,
+                  color: on ? Colors.blue.shade400 : Colors.white54,
                   fontWeight: on ? FontWeight.bold : FontWeight.normal,
                   fontSize: 14,
                 ),
@@ -1016,7 +1015,7 @@ class _StatsRow extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: Text(
         '$count $label',
-        style: const TextStyle(color: AppTheme.textGrey, fontSize: 13),
+        style: const TextStyle(color: Colors.white54, fontSize: 13),
       ),
     ),
   );
@@ -1031,11 +1030,11 @@ class _EmptyState extends StatelessWidget {
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icon, size: 80, color: AppTheme.textGrey),
+        Icon(icon, size: 80, color: Colors.white54),
         const SizedBox(height: 16),
         Text(
           label,
-          style: const TextStyle(color: AppTheme.textGrey, fontSize: 16),
+          style: const TextStyle(color: Colors.white54, fontSize: 16),
           textAlign: TextAlign.center,
         ),
       ],
@@ -1143,7 +1142,7 @@ class _FileList extends StatelessWidget {
           onLongPress: () => onLongPress(path),
           child: Container(
             color: selected
-                ? AppTheme.accentBlue.withOpacity(0.12)
+                ? Colors.blue.shade400.withOpacity(0.12)
                 : Colors.transparent,
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(
@@ -1159,14 +1158,14 @@ class _FileList extends StatelessWidget {
               ),
               subtitle: Text(
                 '${item.sizeLabel}  |  ${item.dateLabel}',
-                style: const TextStyle(color: AppTheme.textGrey, fontSize: 12),
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
               ),
               trailing: isSelectionMode
                   ? Icon(
                       selected
                           ? Icons.check_circle
                           : Icons.radio_button_unchecked,
-                      color: selected ? AppTheme.accentBlue : AppTheme.textGrey,
+                      color: selected ? Colors.blue.shade400 : Colors.white54,
                     )
                   : (trailingBuilder != null
                         ? trailingBuilder!(item, selected)
@@ -1188,9 +1187,9 @@ class _BottomActionBar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     height: 64 + MediaQuery.of(context).padding.bottom,
     padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
-    decoration: const BoxDecoration(
-      color: AppTheme.cardGrey,
-      border: Border(top: BorderSide(color: Colors.white10)),
+    decoration: BoxDecoration(
+      color: Colors.white.withOpacity(0.05),
+      border: const Border(top: BorderSide(color: Colors.white10)),
     ),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
