@@ -11,16 +11,22 @@ import 'package:path_provider/path_provider.dart';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 String _fmtSpeed(double bps) {
-  if (bps >= 1024 * 1024)
+  if (bps >= 1024 * 1024) {
     return '${(bps / (1024 * 1024)).toStringAsFixed(1)} MB/s';
-  if (bps >= 1024) return '${(bps / 1024).toStringAsFixed(1)} KB/s';
+  }
+  if (bps >= 1024) {
+    return '${(bps / 1024).toStringAsFixed(1)} KB/s';
+  }
   return '${bps.toStringAsFixed(0)} B/s';
 }
 
 String _fmtBytes(int bytes) {
-  if (bytes >= 1024 * 1024)
+  if (bytes >= 1024 * 1024) {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  if (bytes >= 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  if (bytes >= 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
   return '$bytes B';
 }
 
@@ -112,8 +118,9 @@ class TransferJob {
   String get statusText {
     if (error != null) return 'Error: $error';
     if (cancelled) return cancelMessage ?? 'Cancelled';
-    if (isComplete)
+    if (isComplete) {
       return 'Done – $completedFiles file${completedFiles == 1 ? '' : 's'}';
+    }
     return '$completedFiles / $totalFiles  •  $sentText / $totalText';
   }
 }
@@ -157,6 +164,7 @@ class ReceiveJob {
       totalBytes <= 0 ? -1.0 : (receivedBytes / totalBytes).clamp(0.0, 1.0);
 
   String get speedText => _fmtSpeed(_speed.bytesPerSec);
+  double get currentSpeed => _speed.bytesPerSec;
   String get receivedText => _fmtBytes(receivedBytes);
   String get totalText => totalBytes > 0 ? _fmtBytes(totalBytes) : '?';
 
@@ -517,22 +525,38 @@ class TransferService extends ChangeNotifier {
     _safeNotify();
   }
 
+  /// Cancels all active and pending incoming receives at once.
+  void cancelAllReceives({required ConnectionManager connectionManager}) {
+    for (final job in List.of(receiveJobs)) {
+      if (!job.isComplete) {
+        job.cancelled = true;
+        job.isComplete = true;
+        job.hasError = true;
+        job.cancelMessage = 'Cancelled';
+        connectionManager.cancelReceiveJob(job.id);
+      }
+    }
+    // Also explicitly tell connection manager to cancel any active HTTP uploads
+    connectionManager.cancelReceiveJob('');
+    _safeNotify();
+  }
+
   /// Called when the user manually cancels an incoming transfer.
   void cancelReceive({
     required String id,
     required ConnectionManager connectionManager,
   }) {
     final job = receiveJobs.where((j) => j.id == id).firstOrNull;
-    if (job == null || job.isComplete || job.cancelled) return;
-
-    job.cancelled = true;
-    job.isComplete = true;
-    job.hasError = true;
-    job.cancelMessage = 'Cancelled';
-    _safeNotify();
-
-    // Tell the connection manager to close the socket and notify the sender.
+    if (job != null) {
+      job.cancelled = true;
+      job.isComplete = true;
+      job.hasError = true;
+      job.cancelMessage = 'Cancelled';
+    }
+    // Explicitly notify connectionManager for this specific job
     connectionManager.cancelReceiveJob(id);
+    // Cancel any other queued receives together
+    cancelAllReceives(connectionManager: connectionManager);
   }
 
   /// Called when the SENDER remotely cancels the transfer.

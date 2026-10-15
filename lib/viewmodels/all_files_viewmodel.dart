@@ -151,16 +151,20 @@ class AllFilesViewModel extends ChangeNotifier {
   bool _searchCancelled = false;
 
   String get itemCountString {
-    if (items.isEmpty) return '0 items in total';
+    if (items.isEmpty) return '0 folders';
 
     final folderCount = items.where((i) => i.isDirectory).length;
     final fileCount = items.length - folderCount;
 
     if (fileCount == 0 && folderCount > 0) {
-      return '$folderCount folder${folderCount == 1 ? '' : 's'} in total';
+      return '$folderCount folder${folderCount == 1 ? '' : 's'}';
     }
 
-    return '${items.length} items in total';
+    if (folderCount == 0 && fileCount > 0) {
+      return '$fileCount file${fileCount == 1 ? '' : 's'}';
+    }
+
+    return '${items.length} items';
   }
 
   /// Deep-search recursively from [currentPath], filtering by [query].
@@ -466,7 +470,7 @@ class AllFilesViewModel extends ChangeNotifier {
   }
 
   String formatDateString(DateTime date) {
-    return DateFormat('d MMMM y').format(date); // e.g. "13 December 2025"
+    return DateFormat('d MMM y').format(date); // e.g. "19 Sep 2026"
   }
 
   void setSortOption(SortOption option) {

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import 'package:vortex/theme/app_theme.dart';
 import 'package:vortex/services/connection_manager.dart';
 import 'package:vortex/services/transfer_service.dart';
+import 'package:vortex/utils/file_opener.dart';
 
 class ReceiveView extends StatelessWidget {
   const ReceiveView({super.key});
@@ -13,288 +15,350 @@ class ReceiveView extends StatelessWidget {
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
         leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-          ),
+          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
           onPressed: () => Navigator.pop(context),
         ),
+        titleSpacing: 0,
         title: const Text(
-          'Incoming Files',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          'Incoming files',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+          ),
         ),
         actions: [
           Consumer<TransferService>(
             builder: (context, ts, _) {
               final hasDone = ts.receiveJobs.any(
-                (j) => j.isComplete || j.hasError,
+                (j) => j.isComplete || j.hasError || j.cancelled,
               );
               if (!hasDone) return const SizedBox.shrink();
               return TextButton(
                 onPressed: ts.dismissCompletedReceives,
-                child: Text(
+                child: const Text(
                   'Clear done',
-                  style: TextStyle(color: Colors.blue.shade400),
+                  style: TextStyle(
+                    color: AppTheme.accentLime,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               );
             },
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Consumer<TransferService>(
         builder: (context, ts, _) {
           final jobs = ts.receiveJobs;
+          final failedCount =
+              jobs.where((j) => j.hasError && !j.cancelled).length;
+          final cancelledCount = jobs.where((j) => j.cancelled).length;
+          final activeCount = jobs
+              .where((j) => !j.isComplete && !j.hasError && !j.cancelled)
+              .length;
 
-          if (jobs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(28),
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Summary counter header: 1 failed  2 cancelled  0 active
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: Row(
+                  children: [
+                    _buildCounterItem(
+                      count: failedCount,
+                      label: 'failed',
+                      color: const Color(0xFFFF5C5C),
                     ),
-                    child: Icon(
-                      Icons.download_rounded,
-                      size: 56,
-                      color: Colors.blue.shade300,
+                    const SizedBox(width: 24),
+                    _buildCounterItem(
+                      count: cancelledCount,
+                      label: 'cancelled',
+                      color: Colors.white,
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Nothing receiving',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                    const SizedBox(width: 24),
+                    _buildCounterItem(
+                      count: activeCount,
+                      label: 'active',
+                      color: activeCount > 0
+                          ? AppTheme.accentLime
+                          : const Color(0xFF78828A),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Files sent to this device will appear here',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.4),
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ).animate().fadeIn(duration: 500.ms);
-          }
+              const Divider(height: 1, thickness: 1, color: Color(0xFF14171B)),
 
-          return ListView.separated(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-            itemCount: jobs.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) {
-              final job = jobs[index];
-              return _ReceiveJobCard(job: job)
-                  .animate()
-                  .fadeIn(duration: 400.ms, delay: (50 * index).ms)
-                  .slideX(begin: 0.05, end: 0, duration: 300.ms);
-            },
+              // Content list or empty state
+              Expanded(
+                child: jobs.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF14171B),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: const Color(0xFF1E2228),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.download_rounded,
+                                size: 48,
+                                color: Color(0xFF78828A),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            const Text(
+                              'Nothing receiving',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Files sent to this device will appear here',
+                              style: TextStyle(
+                                color: Color(0xFF78828A),
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ).animate().fadeIn(duration: 400.ms)
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: jobs.length,
+                        itemBuilder: (context, index) {
+                          final job = jobs[index];
+                          return _ReceiveJobRow(job: job)
+                              .animate()
+                              .fadeIn(duration: 300.ms, delay: (40 * index).ms);
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),
     );
   }
+
+  Widget _buildCounterItem({
+    required int count,
+    required String label,
+    required Color color,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          '$count',
+          style: TextStyle(
+            color: count > 0 ? color : const Color(0xFF78828A),
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF78828A),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-class _ReceiveJobCard extends StatelessWidget {
-  const _ReceiveJobCard({required this.job});
+class _ReceiveJobRow extends StatelessWidget {
+  const _ReceiveJobRow({required this.job});
   final ReceiveJob job;
 
   @override
   Widget build(BuildContext context) {
     final progress = job.progress;
-    // When cancelled or errored, freeze the bar at current progress (no null
-    // / indeterminate so it stops moving). Only isSaving should be indeterminate.
-    final bool isIndeterminate = job.isSaving;
-    final progressValue = job.isSaving
-        ? null
-        : job.cancelled
-            ? (progress >= 0 ? progress : 0.0)
-            : (job.isComplete || job.hasError)
-                ? (job.hasError ? (progress >= 0 ? progress : 0.0) : 1.0)
-                : (progress >= 0 ? progress : null);
+    final int percentInt =
+        (progress >= 0 ? (progress * 100) : 0).clamp(0, 100).toInt();
 
-    final Color barColor;
-    final Color bgColor;
-    // Distinguish user-cancel (grey) from remote-cancel or error (red)
+    final bool isFailed = job.hasError && !job.cancelled;
     final bool isCancelled = job.cancelled;
-    if (isCancelled) {
-      barColor = Colors.grey.shade500;
-      bgColor = Colors.grey.withOpacity(0.08);
-    } else if (job.hasError) {
-      barColor = Colors.red.shade400;
-      bgColor = Colors.red.withOpacity(0.08);
-    } else if (job.isComplete) {
-      barColor = Colors.green.shade400;
-      bgColor = Colors.green.withOpacity(0.08);
-    } else if (job.isSaving) {
-      barColor = Colors.orange.shade400;
-      bgColor = Colors.orange.withOpacity(0.08);
+    final bool isComplete = job.isComplete && !job.hasError;
+    final bool isSaving = job.isSaving;
+
+    // Status label and color
+    final String statusText;
+    final Color statusColor;
+    final Color barColor;
+
+    if (isFailed) {
+      statusText = 'Failed · $percentInt%';
+      statusColor = const Color(0xFFFF5C5C);
+      barColor = const Color(0xFFFF5C5C);
+    } else if (isCancelled) {
+      statusText = 'Cancelled · $percentInt%';
+      statusColor = const Color(0xFF78828A);
+      barColor = const Color(0xFF5A636C);
+    } else if (isSaving) {
+      statusText = 'Saving to disk…';
+      statusColor = Colors.orange.shade300;
+      barColor = Colors.orange.shade300;
+    } else if (isComplete) {
+      statusText = 'Completed · 100%';
+      statusColor = AppTheme.accentLime;
+      barColor = AppTheme.accentLime;
     } else {
-      barColor = Colors.blue.shade400;
-      bgColor = Colors.blue.withOpacity(0.08);
+      // Active receiving
+      statusText = 'Receiving · $percentInt%  (${job.speedText})';
+      statusColor = AppTheme.accentLime;
+      barColor = AppTheme.accentLime;
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: barColor.withOpacity(0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    final double barValue = isSaving
+        ? 1.0
+        : (progress >= 0 ? progress.clamp(0.0, 1.0) : 0.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: barColor.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(10),
+              // Row 1: File name (Bold White)
+              Text(
+                job.fileName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
                 ),
-                child: Icon(
-                  job.hasError
-                      ? Icons.error_outline_rounded
-                      : job.isComplete
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.downloading_rounded,
-                  color: barColor,
-                  size: 18,
-                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      job.fileName,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      job.isSaving
-                          ? 'Writing to disk…'
-                          : job.cancelled
-                              ? (job.cancelMessage ?? 'Cancelled')
-                              : job.isComplete
-                                  ? (job.hasError
-                                      ? (job.cancelMessage ?? 'Failed')
-                                      : 'Completed')
-                                  : '${job.receivedText} / ${job.totalText}',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (job.isSaving) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Saving',
+              const SizedBox(height: 6),
+
+              // Row 2: Status & percentage (Left) and Action button (Right)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    statusText,
                     style: TextStyle(
-                      color: Colors.orange.shade300,
-                      fontSize: 11,
+                      color: statusColor,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                ),
-              ] else if (!job.isComplete && !job.hasError) ...[
-                Text(
-                  job.speedText,
-                  style: TextStyle(
-                    color: Colors.blue.shade300,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: () {
-                    context.read<TransferService>().cancelReceive(
-                      id: job.id,
-                      connectionManager: context.read<ConnectionManager>(),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
+                  if (isFailed || isCancelled)
+                    GestureDetector(
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Please ask sender to re-send ${job.fileName}',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            backgroundColor: const Color(0xFF16191E),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        'Retry',
+                        style: TextStyle(
+                          color: AppTheme.accentLime,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    )
+                  else if (isComplete && job.savedPath != null)
+                    GestureDetector(
+                      onTap: () => FileOpener.openFile(context, job.savedPath!),
+                      child: const Text(
+                        'Open',
+                        style: TextStyle(
+                          color: AppTheme.accentLime,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    )
+                  else if (!isComplete && !job.hasError)
+                    GestureDetector(
+                      onTap: () {
+                        context.read<TransferService>().cancelReceive(
+                          id: job.id,
+                          connectionManager: context.read<ConnectionManager>(),
+                        );
+                      },
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Color(0xFFFF5C5C),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                    child: Icon(
-                      Icons.close_rounded,
-                      size: 14,
-                      color: Colors.red.shade300,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Row 3: Slim Progress Bar
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Stack(
+                    children: [
+                      // Background Track
+                      Container(
+                        height: 2.5,
+                        width: constraints.maxWidth,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E2228),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      // Progress Fill
+                      Container(
+                        height: 2.5,
+                        width: constraints.maxWidth * barValue,
+                        decoration: BoxDecoration(
+                          color: barColor,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: isIndeterminate ? null : progressValue,
-              backgroundColor: Colors.white.withOpacity(0.08),
-              valueColor: AlwaysStoppedAnimation<Color>(barColor),
-              minHeight: 6,
-            ),
-          ),
-
-          if (!job.isComplete && !job.hasError && progress >= 0) ...[
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${(progress * 100).toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
+        ),
+        const Divider(height: 1, thickness: 1, color: Color(0xFF14171B)),
+      ],
     );
   }
 }

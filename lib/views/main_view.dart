@@ -9,9 +9,13 @@ import 'package:vortex/views/link_flow/connect_device_view.dart';
 
 import 'package:vortex/views/recent_view.dart';
 import 'package:vortex/views/home_view.dart';
+import 'package:vortex/widgets/transfer_island.dart';
+import 'package:vortex/services/web_share_service.dart';
+import 'package:vortex/views/web_share_view.dart';
+import 'package:vortex/theme/app_theme.dart';
 
 class MainWrapperView extends StatefulWidget {
-  const MainWrapperView({Key? key}) : super(key: key);
+  const MainWrapperView({super.key});
 
   @override
   State<MainWrapperView> createState() => _MainWrapperViewState();
@@ -37,6 +41,10 @@ class _MainWrapperViewState extends State<MainWrapperView> {
 
       // Start listening on the networking port continuously
       connectionManager.startServer();
+
+      // Connect Web Share handler
+      final webShareService = context.read<WebShareService>();
+      connectionManager.webShareHandler = webShareService.handleHttpRequest;
 
       // ── Show snackbar on this device when any peer connects ──────────────
       connectionManager.onConnectionEstablished = () {
@@ -68,6 +76,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       };
 
       connectionManager.onFileReceived = (relativePath, savedPath) {
+        context.read<WebShareService>().registerReceivedFile(relativePath, savedPath);
         SchedulerBinding.instance.ensureVisualUpdate();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -142,6 +151,13 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       connectionManager.onReceiverCancelledTransfer = () {
         transferService.cancelJobByReceiver();
       };
+
+      connectionManager.onHttpUploadCancelled = () {
+        webShareService.markUploadCancelled();
+      };
+      connectionManager.onHttpUploadStarted = () {
+        webShareService.resetUploadCancelled();
+      };
     }); // end addPostFrameCallback
   }
 
@@ -150,89 +166,167 @@ class _MainWrapperViewState extends State<MainWrapperView> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: IndexedStack(index: _currentIndex, children: _pages),
-      bottomNavigationBar: _buildBottomBar(context),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const TransferIsland(),
+          _buildBottomBar(context),
+        ],
+      ),
     );
   }
 
   Widget _buildBottomBar(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0D0D0D),
-        border: Border(
-          top: BorderSide(color: Color(0xFF1E1E1E), width: 1),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 68,
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildNavItem(
-                  icon: Icons.inbox_outlined,
-                  selectedIcon: Icons.inbox_rounded,
-                  label: 'Received',
-                  index: 0,
-                ),
-              ),
-              _buildLinkButton(context),
-              Expanded(
-                child: _buildNavItem(
-                  icon: Icons.folder_outlined,
-                  selectedIcon: Icons.folder_rounded,
-                  label: 'Files',
-                  index: 1,
-                ),
-              ),
-            ],
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        height: 68,
+        decoration: BoxDecoration(
+          color: const Color(0xFF14171A),
+          borderRadius: BorderRadius.circular(34),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 1,
           ),
         ),
-      ),
-    );
-  }
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // Received tab
+            Expanded(
+              child: Center(
+                child: InkWell(
+                  onTap: () => setState(() => _currentIndex = 0),
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  child: _currentIndex == 0
+                      ? AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E241E),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppTheme.accentLime.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.inbox_rounded,
+                                color: AppTheme.accentLime,
+                                size: 19,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Received',
+                                style: TextStyle(
+                                  color: AppTheme.accentLime,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(
+                              Icons.inbox_outlined,
+                              color: Color(0xFF78828A),
+                              size: 22,
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Received',
+                              style: TextStyle(
+                                color: Color(0xFF78828A),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+            ),
 
-  Widget _buildNavItem({
-    required IconData icon,
-    required IconData selectedIcon,
-    required String label,
-    required int index,
-  }) {
-    final isSelected = _currentIndex == index;
-    return InkWell(
-      onTap: () => setState(() => _currentIndex = index),
-      splashColor: Colors.blue.withOpacity(0.08),
-      highlightColor: Colors.transparent,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? const Color(0xFF1A3A5C)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(24),
+            // Center vortex button
+            _buildLinkButton(context),
+
+            // Files tab
+            Expanded(
+              child: Center(
+                child: InkWell(
+                  onTap: () => setState(() => _currentIndex = 1),
+                  splashColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  child: _currentIndex == 1
+                      ? AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E241E),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: AppTheme.accentLime.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.folder_rounded,
+                                color: AppTheme.accentLime,
+                                size: 19,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Files',
+                                style: TextStyle(
+                                  color: AppTheme.accentLime,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(
+                              Icons.folder_outlined,
+                              color: Color(0xFF78828A),
+                              size: 22,
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Files',
+                              style: TextStyle(
+                                color: Color(0xFF78828A),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
             ),
-            child: Icon(
-              isSelected ? selectedIcon : icon,
-              color: isSelected ? Colors.blue.shade300 : const Color(0xFF6B6B6B),
-              size: 22,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.blue.shade300 : const Color(0xFF6B6B6B),
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -241,25 +335,26 @@ class _MainWrapperViewState extends State<MainWrapperView> {
     return GestureDetector(
       onTap: () => _showShareOptions(context),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        width: 52,
-        height: 52,
+        width: 50,
+        height: 50,
         decoration: BoxDecoration(
-          color: const Color(0xFF1565C0),
+          color: AppTheme.accentLime,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.blue.withOpacity(0.35),
-              blurRadius: 18,
+              color: AppTheme.accentLime.withValues(alpha: 0.35),
+              blurRadius: 16,
               spreadRadius: 0,
-              offset: const Offset(0, 4),
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: const Icon(
-          Icons.cyclone_rounded,
-          color: Colors.white,
-          size: 44,
+        child: const Center(
+          child: Icon(
+            Icons.cyclone_rounded,
+            color: Colors.black,
+            size: 28,
+          ),
         ),
       ),
     );
@@ -268,78 +363,108 @@ class _MainWrapperViewState extends State<MainWrapperView> {
   void _showShareOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1C1C1E),
+      backgroundColor: const Color(0xFF14171B),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return Container(
-          padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(2),
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4.5,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E333B),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
                 ),
               ),
               const Text(
-                'Connect & Share',
+                'Connect and share',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
                   color: Colors.white,
+                  letterSpacing: -0.4,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
+              const SizedBox(height: 6),
+              const Text(
                 'Choose how to link with another device',
                 style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF78828A),
                 ),
               ),
-              const SizedBox(height: 24),
-              _buildAnimatedShareOption(
-                icon: Icons.wifi,
-                label: 'Via Wi-Fi',
-                subtitle: 'Fast wireless transfer',
-                color: const Color(0xFF4ECDC4),
-                delay: 0,
-                onTap: () {
-                  Navigator.pop(context);
-                  _showConnectDevice(context);
-                },
+              const SizedBox(height: 22),
+
+              // ── Top Row: Via Wi-Fi & Via USB ──
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildSquareOptionCard(
+                      icon: Icons.wifi_rounded,
+                      title: 'Via Wi-Fi',
+                      subtitle: 'Fast wireless transfer',
+                      delay: 0,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showConnectDevice(context);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildSquareOptionCard(
+                      icon: Icons.usb_rounded,
+                      title: 'Via USB',
+                      subtitle: 'Stable wired connection',
+                      delay: 60,
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showConnectDevice(context, isUsbMode: true);
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
-              _buildAnimatedShareOption(
-                icon: Icons.usb,
-                label: 'Via USB',
-                subtitle: 'Stable wired connection',
-                color: const Color(0xFFFFB347),
-                delay: 80,
-                onTap: () {
-                  Navigator.pop(context);
-                  _showConnectDevice(context, isUsbMode: true);
-                },
-              ),
-              const SizedBox(height: 12),
-              _buildAnimatedShareOption(
-                icon: Icons.sync_alt,
-                label: 'Via Both',
-                subtitle: 'Maximum speed',
-                color: const Color(0xFF9B59B6),
-                delay: 160,
+
+              // ── Hero Highlight Card: Via both ──
+              _buildHeroOptionCard(
+                icon: Icons.swap_horiz_rounded,
+                title: 'Via both',
+                subtitle: 'Maximum speed (Turbo)',
+                delay: 120,
                 onTap: () {
                   Navigator.pop(context);
                   _showConnectDevice(context, isBothMode: true);
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+
+              // ── Full-Width Card: Web share portal ──
+              _buildWideOptionCard(
+                icon: Icons.language_rounded,
+                title: 'Web share portal',
+                subtitle: 'No app needed · share via browser',
+                delay: 180,
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const WebShareView()),
+                  );
+                },
+              ),
+              SizedBox(height: MediaQuery.of(context).padding.bottom > 0 ? 8 : 12),
             ],
           ),
         );
@@ -370,35 +495,85 @@ class _MainWrapperViewState extends State<MainWrapperView> {
     );
   }
 
-  Widget _buildAnimatedShareOption({
+  Widget _buildSquareOptionCard({
     required IconData icon,
-    required String label,
+    required String title,
     required String subtitle,
-    required Color color,
     required int delay,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFF0C0E11),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: color.withOpacity(0.2),
+            color: const Color(0xFF1E2228),
             width: 1,
           ),
         ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              color: AppTheme.accentLime,
+              size: 28,
+            ),
+            const SizedBox(height: 22),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: Color(0xFF78828A),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 250.ms, delay: delay.ms).scale(
+          begin: const Offset(0.95, 0.95),
+          end: const Offset(1, 1),
+          duration: 250.ms,
+          delay: delay.ms,
+          curve: Curves.easeOut,
+        );
+  }
+
+  Widget _buildHeroOptionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required int delay,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        decoration: BoxDecoration(
+          color: AppTheme.accentLime,
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 24),
+            Icon(
+              icon,
+              color: Colors.black,
+              size: 28,
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -406,35 +581,107 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    label,
+                    title,
                     style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                      color: Colors.black,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
+                    style: const TextStyle(
+                      color: Color(0xFF43600C),
                       fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: Colors.white.withOpacity(0.3),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.black,
+              size: 24,
             ),
           ],
         ),
       ),
-    ).animate().fadeIn(duration: 300.ms, delay: delay.ms).slideX(
-          begin: 0.1,
+    ).animate().fadeIn(duration: 250.ms, delay: delay.ms).slideY(
+          begin: 0.08,
           end: 0,
-          duration: 300.ms,
+          duration: 250.ms,
+          delay: delay.ms,
+          curve: Curves.easeOut,
+        );
+  }
+
+  Widget _buildWideOptionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required int delay,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0C0E11),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF1E2228),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: AppTheme.accentLime,
+              size: 26,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Color(0xFF78828A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: Color(0xFF4A525A),
+              size: 22,
+            ),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 250.ms, delay: delay.ms).slideY(
+          begin: 0.08,
+          end: 0,
+          duration: 250.ms,
           delay: delay.ms,
           curve: Curves.easeOut,
         );

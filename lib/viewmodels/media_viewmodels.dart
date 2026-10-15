@@ -241,16 +241,21 @@ class VideoAlbumDetailViewModel extends ChangeNotifier {
 }
 
 // ─── Media list ViewModel (Audio / Archives / APKs) ─
-class _FileItem {
+class MediaFileItem {
   final File file;
   final String name;
   final String ext;
   final int sizeBytes;
   final DateTime modified;
 
-  _FileItem(this.file, this.sizeBytes, this.modified)
+  MediaFileItem(this.file, this.sizeBytes, this.modified)
     : name = file.path.split('/').last,
       ext = file.path.split('.').last.toLowerCase();
+
+  String get nameWithoutExt {
+    final lastDot = name.lastIndexOf('.');
+    return lastDot > 0 ? name.substring(0, lastDot) : name;
+  }
 
   String get sizeLabel {
     final kb = sizeBytes / 1024;
@@ -277,6 +282,8 @@ class _FileItem {
     'Dec',
   ][m - 1];
 }
+
+typedef _FileItem = MediaFileItem;
 
 class MediaListViewModel extends ChangeNotifier {
   final Set<String> _exts;
@@ -355,9 +362,18 @@ class MediaListViewModel extends ChangeNotifier {
   }
 
   void _refilter() {
-    var base = activeFilter == 'All'
-        ? _allItems
-        : _allItems.where((f) => f.ext == activeFilter.toLowerCase()).toList();
+    var base = _allItems;
+    if (activeFilter != 'All') {
+      final af = activeFilter.toLowerCase();
+      base = base.where((f) {
+        final ext = f.ext.toLowerCase();
+        if (af == 'doc') return ext == 'doc' || ext == 'docx';
+        if (af == 'xls') return ext == 'xls' || ext == 'xlsx';
+        if (af == 'ppt') return ext == 'ppt' || ext == 'pptx';
+        if (af == 'txt') return ext == 'txt' || ext == 'rtf' || ext == 'odt';
+        return ext == af;
+      }).toList();
+    }
     if (searchQuery.isNotEmpty) {
       final q = searchQuery.toLowerCase();
       base = base.where((f) => f.name.toLowerCase().contains(q)).toList();

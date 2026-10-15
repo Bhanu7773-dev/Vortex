@@ -31,6 +31,10 @@ class ConnectionManager extends ChangeNotifier {
   // cancelled from the UI.
   final Map<String, Socket> _activeReceiveSockets = {};
 
+  // Active incoming HTTP uploads (Web Share) keyed by receive-job ID.
+  final Map<String, HttpRequest> _activeHttpUploads = {};
+  final Set<String> _cancelledHttpUploadIds = {};
+
   // Maps deviceName -> WebSocketChannel
   final Map<String, WebSocketChannel> _activeChannels = {};
 
@@ -84,6 +88,8 @@ class ConnectionManager extends ChangeNotifier {
   Function(String id, String relativePath, String savedPath)?
   onFileReceiveComplete;
   String? _activeMultiReceiveJobId;
+  VoidCallback? onHttpUploadCancelled;
+  VoidCallback? onHttpUploadStarted;
 
   bool get isLinked => _activeChannels.isNotEmpty;
   List<String> get connectedDeviceNames => _activeChannels.keys.toList();
@@ -100,6 +106,9 @@ class ConnectionManager extends ChangeNotifier {
     // Generate a new 6-digit token for this session
     qrToken = (Random().nextInt(900000) + 100000).toString();
   }
+
+  /// Optional handler for Web Share HTTP requests (served by WebShareService).
+  Future<bool> Function(HttpRequest request)? webShareHandler;
 
   /// Starts the background HTTP server on the fixed Vortex port.
   Future<void> startServer() async {
@@ -120,10 +129,27 @@ class ConnectionManager extends ChangeNotifier {
       debugPrint('Vortex Server listening on port: ${_httpServer!.port}');
 
       _httpServer!.listen((HttpRequest request) async {
+        // Allow cross-origin requests for browser clients
+        request.response.headers.set('Access-Control-Allow-Origin', '*');
+        request.response.headers.set(
+          'Access-Control-Allow-Methods',
+          'GET, POST, OPTIONS',
+        );
+        request.response.headers.set('Access-Control-Allow-Headers', '*');
+
+        if (request.method == 'OPTIONS') {
+          request.response
+            ..statusCode = HttpStatus.ok
+            ..close();
+          return;
+        }
+
         if (request.uri.path == '/ws') {
           await _handleWebSocketUpgrade(request);
         } else if (request.uri.path == '/upload' && request.method == 'POST') {
           await _handleUpload(request);
+        } else if (webShareHandler != null && await webShareHandler!(request)) {
+          // Handled by webShareHandler
         } else {
           request.response
             ..statusCode = HttpStatus.notFound
@@ -300,6 +326,8 @@ class ConnectionManager extends ChangeNotifier {
     }
   }
 
+  DateTime? _lastHttpUploadCancelTime;
+
   /// Cancel an active receive job by jobId (closes socket) and notify the sender.
   void cancelReceiveJob(String jobId) {
     // Single-channel TCP receive
@@ -308,6 +336,32 @@ class ConnectionManager extends ChangeNotifier {
       try {
         sock.destroy();
       } catch (_) {}
+    }
+    // HTTP upload receive (Web Share)
+    _lastHttpUploadCancelTime = DateTime.now();
+    debugPrint(
+      '[ConnectionManager] cancelReceiveJob($jobId) called. Cancelling ${_activeHttpUploads.length} active uploads.',
+    );
+    onHttpUploadCancelled?.call();
+    final uploadIds = List<String>.from(_activeHttpUploads.keys);
+    for (final id in uploadIds) {
+      final httpReq = _activeHttpUploads.remove(id);
+      if (httpReq != null) {
+        _cancelledHttpUploadIds.add(id);
+        try {
+          httpReq.response.persistentConnection = false;
+          httpReq.response.statusCode = HttpStatus.badRequest;
+          httpReq.response.headers.contentType = ContentType.json;
+          httpReq.response.headers.set(HttpHeaders.connectionHeader, 'close');
+          httpReq.response.write(
+            jsonEncode({
+              'status': 'cancelled',
+              'error': 'Transfer cancelled by recipient',
+            }),
+          );
+          httpReq.response.close().catchError((_) {});
+        } catch (_) {}
+      }
     }
     // Multi-channel receive
     if (jobId == _activeMultiReceiveJobId) {
@@ -730,9 +784,29 @@ class ConnectionManager extends ChangeNotifier {
   // ============== FILE RECEIVE ==============
 
   Future<void> _handleUpload(HttpRequest request) async {
+    // If an upload was recently cancelled on phone, reject immediate retries or queue
+    if (_lastHttpUploadCancelTime != null &&
+        DateTime.now().difference(_lastHttpUploadCancelTime!).inMilliseconds < 4000) {
+      debugPrint('[Upload] Rejecting post-cancel request');
+      request.response
+        ..persistentConnection = false
+        ..statusCode = HttpStatus.badRequest
+        ..headers.contentType = ContentType.json
+        ..headers.set(HttpHeaders.connectionHeader, 'close')
+        ..write(jsonEncode({'status': 'cancelled', 'error': 'Transfer was cancelled'}))
+        ..close().catchError((_) {});
+      return;
+    }
+
+    _lastHttpUploadCancelTime = null;
+    onHttpUploadStarted?.call();
+
     final jobId = _uuid.v4();
+    _activeHttpUploads[jobId] = request;
     String relativePath = 'received_file';
     File? file;
+    IOSink? sink;
+    bool wasCancelled = false;
     try {
       final encoded = request.headers.value('x-vortex-path') ?? 'received_file';
       relativePath = Uri.decodeComponent(encoded);
@@ -756,7 +830,7 @@ class ConnectionManager extends ChangeNotifier {
       }
 
       file = File('${targetDir.path}/$fileName');
-      final sink = file.openWrite();
+      sink = file.openWrite();
 
       // Notify: transfer starting
       onFileReceiveStart?.call(jobId, relativePath, totalBytes);
@@ -764,6 +838,16 @@ class ConnectionManager extends ChangeNotifier {
       int received = 0;
       int pendingNotify = 0;
       await for (final chunk in request) {
+        if (_cancelledHttpUploadIds.contains(jobId) ||
+            (_lastHttpUploadCancelTime != null &&
+                DateTime.now()
+                        .difference(_lastHttpUploadCancelTime!)
+                        .inSeconds <
+                    4)) {
+          debugPrint('[Upload] Cancel detected during streaming for $jobId');
+          wasCancelled = true;
+          break;
+        }
         sink.add(chunk);
         received += chunk.length;
         pendingNotify += chunk.length;
@@ -776,6 +860,37 @@ class ConnectionManager extends ChangeNotifier {
           onFileReceiveProgress?.call(jobId, received);
         }
       }
+
+      if (wasCancelled || _cancelledHttpUploadIds.contains(jobId)) {
+        await sink.flush();
+        await sink.close();
+        try {
+          if (file.existsSync()) await file.delete();
+        } catch (_) {}
+        return;
+      }
+
+      // Check if upload was aborted/truncated before completion
+      if (totalBytes > 0 && received < totalBytes) {
+        await sink.flush();
+        await sink.close();
+        try {
+          if (file.existsSync()) await file.delete();
+        } catch (_) {}
+        onFileReceiveError?.call(
+          jobId,
+          'Upload incomplete (sent $received of $totalBytes bytes)',
+        );
+        try {
+          request.response
+            ..statusCode = HttpStatus.badRequest
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode({'status': 'error', 'error': 'Incomplete upload'}))
+            ..close();
+        } catch (_) {}
+        return;
+      }
+
       // Ensure the final progress is sent if we exited early or had no totalBytes
       if (pendingNotify > 0) {
         onFileReceiveProgress?.call(jobId, received);
@@ -795,14 +910,24 @@ class ConnectionManager extends ChangeNotifier {
       onFileReceiveComplete?.call(jobId, relativePath, file.path);
     } catch (e) {
       debugPrint('[Upload] Error: $e');
+      try {
+        await sink?.flush();
+        await sink?.close();
+      } catch (_) {}
       if (file != null) {
-        onFileReceiveComplete?.call(jobId, relativePath, file.path);
+        try {
+          if (file.existsSync()) await file.delete();
+        } catch (_) {}
       }
+      onFileReceiveError?.call(jobId, 'Upload interrupted: $e');
       try {
         request.response
           ..statusCode = HttpStatus.internalServerError
           ..close();
       } catch (_) {}
+    } finally {
+      _activeHttpUploads.remove(jobId);
+      _cancelledHttpUploadIds.remove(jobId);
     }
   }
 

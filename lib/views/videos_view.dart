@@ -7,6 +7,7 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 import '../viewmodels/media_viewmodels.dart';
 import '../utils/file_opener.dart';
 import '../widgets/share_sheet.dart';
+import '../theme/app_theme.dart';
 
 // ─── Shared thumbnail widget for a video file ──
 class _VideoThumb extends StatefulWidget {
@@ -35,11 +36,12 @@ class _VideoThumbState extends State<_VideoThumb> {
         maxWidth: widget.size.toInt(),
         quality: 60,
       );
-      if (mounted)
+      if (mounted) {
         setState(() {
           _bytes = bytes;
           _tried = true;
         });
+      }
     } catch (_) {
       if (mounted) setState(() => _tried = true);
     }
@@ -49,14 +51,14 @@ class _VideoThumbState extends State<_VideoThumb> {
   Widget build(BuildContext context) {
     if (!_tried) {
       return Container(
-        color: const Color(0xFF1A1A2E),
+        color: const Color(0xFF14171B),
         child: const Center(
           child: SizedBox(
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Colors.white24,
+              color: AppTheme.accentLime,
             ),
           ),
         ),
@@ -64,11 +66,11 @@ class _VideoThumbState extends State<_VideoThumb> {
     }
     if (_bytes == null) {
       return Container(
-        color: const Color(0xFF1A1A2E),
+        color: const Color(0xFF14171B),
         child: const Center(
           child: Icon(
-            Icons.play_circle_outline,
-            color: Colors.white38,
+            Icons.videocam_outlined,
+            color: Color(0xFF2E333B),
             size: 32,
           ),
         ),
@@ -78,12 +80,18 @@ class _VideoThumbState extends State<_VideoThumb> {
       fit: StackFit.expand,
       children: [
         Image.memory(_bytes!, fit: BoxFit.cover),
-        const Center(
-          child: Icon(
-            Icons.play_circle_fill,
-            color: Colors.white60,
-            size: 28,
-            shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.play_arrow_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
         ),
       ],
@@ -100,85 +108,219 @@ class VideosView extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => VideosViewModel(),
       child: Consumer<VideosViewModel>(
-        builder: (context, vm, _) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
+        builder: (context, vm, _) {
+          final albums = vm.albums;
+          final featuredAlbum = albums.isNotEmpty ? albums.first : null;
+          final gridAlbums =
+              albums.length > 1 ? albums.sublist(1) : <VideoAlbum>[];
+
+          return Scaffold(
             backgroundColor: Colors.black,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: const Text(
-              'Videos',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              toolbarHeight: 68,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                onPressed: () => Navigator.pop(context),
+              ),
+              titleSpacing: 0,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Videos',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${albums.length} album${albums.length == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      color: Color(0xFF78828A),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
-            actions: [],
-          ),
-          body: vm.isLoading
-              ? Center(
-                  child: CircularProgressIndicator(color: Colors.blue.shade400),
-                )
-              : vm.albums.isEmpty
-              ? _emptyState(Icons.videocam_off_outlined, 'No videos found')
-              : GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 0.82,
-                  ),
-                  itemCount: vm.albums.length,
-                  itemBuilder: (context, i) {
-                    final album = vm.albums[i];
-                    return GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => VideoAlbumDetailView(album: album),
+            body: vm.isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.accentLime,
+                    ),
+                  )
+                : albums.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.videocam_off_outlined,
+                          size: 72,
+                          color: Color(0xFF78828A),
                         ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: _VideoThumb(
-                                file: album.coverFile,
-                                size: 300,
+                        SizedBox(height: 16),
+                        Text(
+                          'No videos found',
+                          style: TextStyle(
+                            color: Color(0xFF78828A),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      if (featuredAlbum != null)
+                        SliverToBoxAdapter(
+                          child: GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    VideoAlbumDetailView(album: featuredAlbum),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Large Hero Banner Card
+                                  Container(
+                                    height: 200,
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF14171B),
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: _VideoThumb(
+                                      file: featuredAlbum.coverFile,
+                                      size: 800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  // Title + Bold Lime Count Row
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          featuredAlbum.name,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.3,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        '${featuredAlbum.count}',
+                                        style: const TextStyle(
+                                          color: AppTheme.accentLime,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: -0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            album.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
+                        ),
+                      if (gridAlbums.isNotEmpty)
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 16,
+                                  childAspectRatio: 0.72,
+                                ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final album = gridAlbums[index];
+                                return GestureDetector(
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          VideoAlbumDetailView(album: album),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF14171B),
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: _VideoThumb(
+                                            file: album.coverFile,
+                                            size: 320,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        album.name,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: -0.2,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${album.count}',
+                                        style: const TextStyle(
+                                          color: Color(0xFF78828A),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              childCount: gridAlbums.length,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          Text(
-                            '${album.count}',
-                            style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-        ),
+                        ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    ],
+                  ),
+          );
+        },
       ),
     );
   }

@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import '../models/recent_model.dart';
-import '../viewmodels/recent_viewmodel.dart';
-import '../utils/file_opener.dart';
-import 'all_files_view.dart';
+import 'package:vortex/models/recent_model.dart';
+import 'package:vortex/theme/app_theme.dart';
+import 'package:vortex/utils/file_opener.dart';
+import 'package:vortex/viewmodels/recent_viewmodel.dart';
+import 'package:vortex/views/all_files_view.dart';
+import 'package:vortex/widgets/share_sheet.dart';
 
 class RecentView extends StatelessWidget {
   const RecentView({Key? key}) : super(key: key);
+
+  String _getExtension(String fileName) {
+    final parts = fileName.split('.');
+    if (parts.length > 1) {
+      final ext = parts.last.toUpperCase();
+      return ext.length > 4 ? ext.substring(0, 4) : ext;
+    }
+    return 'FILE';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,358 +25,265 @@ class RecentView extends StatelessWidget {
       create: (_) => RecentViewModel(),
       child: Scaffold(
         backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          title: const Text(
-            'Received Files',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          actions: [
-            Consumer<RecentViewModel>(
-              builder: (context, vm, _) => IconButton(
-                icon: const Icon(Icons.folder_open_rounded),
-                tooltip: 'Open Vortex folder',
-                onPressed: vm.receiveDirPath.isEmpty
-                    ? null
-                    : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                AllFilesView(initialPath: vm.receiveDirPath),
-                          ),
-                        ),
-              ),
-            ),
-          ],
-        ),
         body: Consumer<RecentViewModel>(
           builder: (context, viewModel, child) {
-            if (viewModel.isLoading) {
-              return Center(
-                child: CircularProgressIndicator(color: Colors.blue.shade400),
-              );
-            }
-            if (viewModel.sections.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.teal.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Icon(
-                        Icons.move_to_inbox_rounded,
-                        size: 64,
-                        color: Colors.teal.shade300,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'No received files yet',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Files received via Vortex will appear here',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.35),
-                        fontSize: 13,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn(duration: 500.ms);
-            }
-            return CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
-                    ),
-                    child: Text(
-                      viewModel.totalItemsText,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+            final totalCount = viewModel.sections.fold<int>(
+              0,
+              (sum, s) => sum + s.files.length,
+            );
+
+            return SafeArea(
+              bottom: false,
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  // ── Top Header ──────────────────────────────────────────────
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Received',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$totalCount file${totalCount == 1 ? '' : 's'} received',
+                                style: const TextStyle(
+                                  color: Color(0xFF78828A),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.folder_outlined,
+                              color: Colors.white70,
+                              size: 24,
+                            ),
+                            tooltip: 'Open Vortex folder',
+                            onPressed: viewModel.receiveDirPath.isEmpty
+                                ? null
+                                : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => AllFilesView(
+                                          initialPath: viewModel.receiveDirPath,
+                                        ),
+                                      ),
+                                    ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-                ...viewModel.sections.map((section) {
-                  return SliverMainAxisGroup(
-                    slivers: [
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _RecentSectionHeaderDelegate(
-                          section: section,
+
+                  // ── Loading state ───────────────────────────────────────────
+                  if (viewModel.isLoading)
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.accentLime,
                         ),
                       ),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        sliver: SliverGrid(
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 3,
-                                crossAxisSpacing: 12.0,
-                                mainAxisSpacing: 16.0,
-                                childAspectRatio: 0.75,
+                    )
+                  // ── Empty state ─────────────────────────────────────────────
+                  else if (viewModel.sections.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 32),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 72,
+                                height: 72,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.surfaceDark,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.06),
+                                  ),
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.inbox_outlined,
+                                    size: 32,
+                                    color: Color(0xFF78828A),
+                                  ),
+                                ),
                               ),
-                          delegate: SliverChildBuilderDelegate((
-                            context,
-                            index,
-                          ) {
-                            return _RecentItemCard(file: section.files[index])
-                                .animate(
-                                  key: ValueKey('${section.title}_$index'),
-                                )
-                                .fadeIn(duration: 400.ms, delay: (50 * index).ms)
-                                .slideY(
-                                  begin: 0.1,
-                                  end: 0,
-                                  duration: 400.ms,
-                                  curve: Curves.easeOut,
-                                );
-                          }, childCount: section.files.length),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'No received files yet',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Files received via Vortex or Web Share will appear here',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF78828A),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                    ],
-                  );
-                }),
-              ],
+                    )
+                  // ── Content List ────────────────────────────────────────────
+                  else
+                    ...viewModel.sections.map((section) {
+                      return SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            const SizedBox(height: 18),
+                            // Section header
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  section.title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                Text(
+                                  '${section.files.length}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF78828A),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              height: 1,
+                              color: const Color(0xFF16191E),
+                            ),
+                            const SizedBox(height: 6),
+                            // Section items
+                            ...section.files.map(
+                              (file) => _buildFileRow(context, file),
+                            ),
+                          ]),
+                        ),
+                      );
+                    }),
+
+                  // Bottom padding for dock
+                  const SliverToBoxAdapter(child: SizedBox(height: 90)),
+                ],
+              ),
             );
           },
         ),
       ),
     );
   }
-}
 
-class _RecentSectionHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final RecentSectionModel section;
+  Widget _buildFileRow(BuildContext context, RecentFileModel file) {
+    final ext = _getExtension(file.name);
 
-  _RecentSectionHeaderDelegate({required this.section});
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      color: Colors.black,
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-      alignment: Alignment.centerLeft,
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            height: 18,
-            decoration: BoxDecoration(
-              color: Colors.purple.shade400,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            section.title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${section.itemCount}',
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.6),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const Spacer(),
-          Icon(
-            Icons.keyboard_arrow_up_rounded,
-            color: Colors.white.withOpacity(0.4),
-            size: 22,
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  double get maxExtent => 56.0;
-
-  @override
-  double get minExtent => 56.0;
-
-  @override
-  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) {
-    return true;
-  }
-}
-
-class _RecentItemCard extends StatelessWidget {
-  final RecentFileModel file;
-
-  const _RecentItemCard({required this.file});
-
-  IconData _iconForType(String type) {
-    switch (type.toLowerCase()) {
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-      case 'webp':
-      case 'heic':
-      case 'bmp':
-        return Icons.image_rounded;
-      case 'mp4':
-      case 'mkv':
-      case 'avi':
-      case 'mov':
-      case 'webm':
-      case '3gp':
-        return Icons.video_file_rounded;
-      case 'mp3':
-      case 'aac':
-      case 'wav':
-      case 'flac':
-      case 'm4a':
-      case 'ogg':
-        return Icons.audio_file_rounded;
-      case 'pdf':
-        return Icons.picture_as_pdf_rounded;
-      case 'zip':
-      case 'rar':
-      case '7z':
-      case 'tar':
-      case 'gz':
-        return Icons.folder_zip_rounded;
-      case 'apk':
-        return Icons.android_rounded;
-      case 'doc':
-      case 'docx':
-      case 'txt':
-      case 'odt':
-        return Icons.description_rounded;
-      default:
-        return Icons.insert_drive_file_rounded;
-    }
-  }
-
-  Color _colorForType(String type) {
-    switch (type.toLowerCase()) {
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-      case 'webp':
-      case 'heic':
-      case 'bmp':
-        return Colors.blue;
-      case 'mp4':
-      case 'mkv':
-      case 'avi':
-      case 'mov':
-      case 'webm':
-      case '3gp':
-        return Colors.purple;
-      case 'mp3':
-      case 'aac':
-      case 'wav':
-      case 'flac':
-      case 'm4a':
-      case 'ogg':
-        return Colors.orange;
-      case 'pdf':
-        return Colors.red;
-      case 'zip':
-      case 'rar':
-      case '7z':
-      case 'tar':
-      case 'gz':
-        return Colors.amber;
-      case 'apk':
-        return Colors.green;
-      default:
-        return Colors.teal;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ext = file.type.toLowerCase().replaceAll('.', '');
-    final iconColor = _colorForType(ext);
-    return GestureDetector(
+    return InkWell(
       onTap: () => FileOpener.openFile(context, file.path),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            // Extension Badge
+            Container(
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.07),
+                color: const Color(0xFF161E14),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: iconColor.withOpacity(0.15),
+                  color: AppTheme.accentLime.withValues(alpha: 0.15),
                   width: 1,
                 ),
               ),
               child: Center(
-                child: Icon(
-                  _iconForType(ext),
-                  color: iconColor.withOpacity(0.7),
-                  size: 36,
+                child: Text(
+                  ext,
+                  style: const TextStyle(
+                    color: AppTheme.accentLime,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            file.name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 4),
-          Center(
-            child: Text(
-              file.size,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.4),
-                fontSize: 11,
+            const SizedBox(width: 14),
+            // File details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    file.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    file.size,
+                    style: const TextStyle(
+                      color: Color(0xFF78828A),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            // Share action
+            IconButton(
+              icon: const Icon(
+                Icons.file_upload_outlined,
+                color: Color(0xFF78828A),
+                size: 21,
+              ),
+              tooltip: 'Share file',
+              onPressed: () => showVortexShareSheet(context, [file.path]),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:vortex/theme/app_theme.dart';
 import 'package:vortex/viewmodels/all_files_viewmodel.dart';
 import 'package:vortex/models/file_item_model.dart';
 import 'package:vortex/models/storage_volume_model.dart';
@@ -52,6 +53,7 @@ class _AllFilesViewState extends State<AllFilesView> {
               }
             },
             child: Scaffold(
+              backgroundColor: Colors.black,
               floatingActionButton: viewModel.isFolderPickerMode
                   ? FloatingActionButton.extended(
                       onPressed: () {
@@ -69,38 +71,52 @@ class _AllFilesViewState extends State<AllFilesView> {
                         viewModel.selectedPaths.isEmpty
                             ? 'Add this folder'
                             : 'Add ${viewModel.selectedPaths.length} folders',
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                      icon: const Icon(Icons.check),
-                      backgroundColor: Colors.blue.shade400,
+                      icon: const Icon(Icons.check, color: Colors.black),
+                      backgroundColor: AppTheme.accentLime,
                     )
                   : null,
               appBar: PreferredSize(
                 preferredSize: const Size.fromHeight(kToolbarHeight),
                 child: viewModel.isSelectionMode
                     ? AppBar(
+                        backgroundColor: Colors.black,
+                        elevation: 0,
+                        scrolledUnderElevation: 0,
                         leadingWidth: 80,
                         leading: TextButton(
                           onPressed: () => viewModel.toggleSelectionMode(),
-                          child: Text(
+                          child: const Text(
                             'Cancel',
                             style: TextStyle(
-                              color: Colors.blue.shade400,
-                              fontSize: 16,
+                              color: AppTheme.accentLime,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                         title: Text(
                           '${viewModel.selectedPaths.length} selected',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         centerTitle: true,
                         actions: [
                           TextButton(
                             onPressed: () => viewModel.selectAll(),
-                            child: Text(
+                            child: const Text(
                               'Select all',
                               style: TextStyle(
-                                color: Colors.blue.shade400,
-                                fontSize: 16,
+                                color: AppTheme.accentLime,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -108,8 +124,11 @@ class _AllFilesViewState extends State<AllFilesView> {
                       )
                     : _searching
                     ? AppBar(
+                        backgroundColor: Colors.black,
+                        elevation: 0,
+                        scrolledUnderElevation: 0,
                         leading: IconButton(
-                          icon: const Icon(Icons.arrow_back),
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
                           onPressed: () {
                             setState(() => _searching = false);
                             _searchCtrl.clear();
@@ -120,7 +139,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                           controller: _searchCtrl,
                           focusNode: _searchFocus,
                           autofocus: true,
-                          cursorColor: Colors.white,
+                          cursorColor: AppTheme.accentLime,
                           cursorWidth: 2,
                           style: const TextStyle(
                             color: Colors.white,
@@ -129,7 +148,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                           decoration: InputDecoration(
                             hintText:
                                 'Search in ${viewModel.currentFolderName}…',
-                            hintStyle: const TextStyle(color: Colors.white38),
+                            hintStyle: const TextStyle(color: Color(0xFF78828A)),
                             border: InputBorder.none,
                           ),
                           onChanged: (q) {
@@ -149,7 +168,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                               icon: const Icon(
                                 Icons.close,
                                 size: 20,
-                                color: Colors.white54,
+                                color: Color(0xFF78828A),
                               ),
                               onPressed: () {
                                 _searchCtrl.clear();
@@ -160,7 +179,36 @@ class _AllFilesViewState extends State<AllFilesView> {
                         ],
                       )
                     : AppBar(
-                        title: Text(viewModel.currentFolderName),
+                        backgroundColor: Colors.black,
+                        elevation: 0,
+                        scrolledUnderElevation: 0,
+                        centerTitle: false,
+                        leading: IconButton(
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                          onPressed: () {
+                            if (viewModel.pathHistory.isNotEmpty) {
+                              viewModel.goBack();
+                            } else {
+                              Navigator.maybePop(context);
+                            }
+                          },
+                        ),
+                        titleSpacing: 0,
+                        title: Text(
+                          viewModel.currentPath == viewModel.rootPath
+                              ? 'Internal storage'
+                              : viewModel.currentFolderName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
                         actions: [
                           if (viewModel.availableVolumes.length > 1)
                             PopupMenuButton<StorageVolume>(
@@ -169,11 +217,11 @@ class _AllFilesViewState extends State<AllFilesView> {
                                 color: Colors.white,
                               ),
                               tooltip: 'Switch Storage',
-                              color: const Color(0xFF1C1C1E),
+                              color: const Color(0xFF16191E),
                               position: PopupMenuPosition.under,
                               popUpAnimationStyle: AnimationStyle(
                                 curve: Curves.easeOut,
-                                duration: Duration(milliseconds: 180),
+                                duration: const Duration(milliseconds: 180),
                               ),
                               onSelected: (vol) => viewModel.switchStorage(vol),
                               itemBuilder: (context) =>
@@ -189,7 +237,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                                                 ? Icons.phone_android
                                                 : Icons.sd_card,
                                             color: isSelected
-                                                ? Colors.blue.shade400
+                                                ? AppTheme.accentLime
                                                 : Colors.white,
                                             size: 20,
                                           ),
@@ -198,7 +246,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                                             vol.name,
                                             style: TextStyle(
                                               color: isSelected
-                                                  ? Colors.blue.shade400
+                                                  ? AppTheme.accentLime
                                                   : Colors.white,
                                               fontWeight: isSelected
                                                   ? FontWeight.bold
@@ -207,9 +255,9 @@ class _AllFilesViewState extends State<AllFilesView> {
                                           ),
                                           if (isSelected) ...[
                                             const SizedBox(width: 8),
-                                            Icon(
+                                            const Icon(
                                               Icons.check,
-                                              color: Colors.blue.shade400,
+                                              color: AppTheme.accentLime,
                                               size: 16,
                                             ),
                                           ],
@@ -219,47 +267,66 @@ class _AllFilesViewState extends State<AllFilesView> {
                                   }).toList(),
                             ),
                           PopupMenuButton<String>(
-                            icon: const Icon(Icons.add),
-                            color: const Color(0xFF1C1C1E),
+                            icon: const Icon(
+                              Icons.add,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            color: const Color(0xFF16191E),
                             position: PopupMenuPosition.under,
                             popUpAnimationStyle: AnimationStyle(
                               curve: Curves.easeOut,
-                              duration: Duration(milliseconds: 180),
+                              duration: const Duration(milliseconds: 180),
                             ),
                             itemBuilder: (context) => [
                               const PopupMenuItem(
                                 value: 'new_folder',
                                 child: Text(
                                   'New folder',
-                                  style: TextStyle(color: Colors.white),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                               const PopupMenuItem(
                                 value: 'add_files',
                                 child: Text(
                                   'Add files',
-                                  style: TextStyle(color: Colors.white),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
                             onSelected: (value) {
-                              if (value == 'new_folder')
+                              if (value == 'new_folder') {
                                 _showCreateDialog(context, viewModel, true);
-                              else if (value == 'add_files')
+                              } else if (value == 'add_files') {
                                 _showCreateDialog(context, viewModel, false);
+                              }
                             },
                           ),
                           IconButton(
-                            icon: const Icon(Icons.search),
+                            icon: const Icon(
+                              Icons.search,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                             onPressed: () => setState(() => _searching = true),
                           ),
                           PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert),
-                            color: const Color(0xFF1C1C1E),
+                            icon: const Icon(
+                              Icons.more_vert,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                            color: const Color(0xFF16191E),
                             position: PopupMenuPosition.under,
                             popUpAnimationStyle: AnimationStyle(
                               curve: Curves.easeOut,
-                              duration: Duration(milliseconds: 180),
+                              duration: const Duration(milliseconds: 180),
                             ),
                             itemBuilder: (context) => [
                               PopupMenuItem(
@@ -268,22 +335,29 @@ class _AllFilesViewState extends State<AllFilesView> {
                                   viewModel.isGridView
                                       ? 'List view'
                                       : 'Grid view',
-                                  style: const TextStyle(color: Colors.white),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                               const PopupMenuItem(
                                 value: 'edit',
                                 child: Text(
                                   'Edit',
-                                  style: TextStyle(color: Colors.white),
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                             ],
                             onSelected: (value) {
-                              if (value == 'grid_view')
+                              if (value == 'grid_view') {
                                 viewModel.toggleGridView();
-                              else if (value == 'edit')
+                              } else if (value == 'edit') {
                                 viewModel.toggleSelectionMode();
+                              }
                             },
                           ),
                         ],
@@ -306,19 +380,19 @@ class _AllFilesViewState extends State<AllFilesView> {
                           child: Row(
                             children: [
                               if (viewModel.isSearchLoading)
-                                SizedBox(
+                                const SizedBox(
                                   width: 16,
                                   height: 16,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.blue.shade400,
+                                    color: AppTheme.accentLime,
                                   ),
                                 )
                               else
-                                Icon(
+                                const Icon(
                                   Icons.search,
                                   size: 16,
-                                  color: Colors.white54,
+                                  color: Color(0xFF78828A),
                                 ),
                               const SizedBox(width: 8),
                               Text(
@@ -326,7 +400,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                                     ? 'Searching…  ${results.length} found'
                                     : '${results.length} results for "${viewModel.searchQuery}"',
                                 style: const TextStyle(
-                                  color: Colors.white54,
+                                  color: Color(0xFF78828A),
                                   fontSize: 13,
                                 ),
                               ),
@@ -342,13 +416,13 @@ class _AllFilesViewState extends State<AllFilesView> {
                                   const Icon(
                                     Icons.search_off,
                                     size: 70,
-                                    color: Colors.white54,
+                                    color: Color(0xFF78828A),
                                   ),
                                   const SizedBox(height: 14),
                                   Text(
                                     'No results for "${viewModel.searchQuery}"',
                                     style: const TextStyle(
-                                      color: Colors.white54,
+                                      color: Color(0xFF78828A),
                                       fontSize: 15,
                                     ),
                                   ),
@@ -373,9 +447,9 @@ class _AllFilesViewState extends State<AllFilesView> {
 
                   // ── Normal browse mode ──
                   if (viewModel.isLoading) {
-                    return Center(
+                    return const Center(
                       child: CircularProgressIndicator(
-                        color: Colors.blue.shade400,
+                        color: AppTheme.accentLime,
                       ),
                     );
                   }
@@ -486,37 +560,40 @@ class _AllFilesViewState extends State<AllFilesView> {
   Widget _buildHeader(AllFilesViewModel viewModel) {
     return SliverToBoxAdapter(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Text(
-                viewModel.displayPath,
-                style: TextStyle(
-                  color: Colors.blue.shade400,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+            if (viewModel.currentPath != viewModel.rootPath)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  viewModel.displayPath,
+                  style: const TextStyle(
+                    color: Color(0xFF78828A),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   viewModel.itemCountString,
                   style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 14,
+                    color: Color(0xFF78828A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 PopupMenuButton<SortOption>(
-                  color: const Color(0xFF1C1C1E),
+                  color: const Color(0xFF16191E),
+                  elevation: 6,
                   position: PopupMenuPosition.under,
                   popUpAnimationStyle: AnimationStyle(
                     curve: Curves.easeOut,
-                    duration: Duration(milliseconds: 180),
+                    duration: const Duration(milliseconds: 180),
                   ),
                   onSelected: (option) {
                     viewModel.setSortOption(option);
@@ -525,9 +602,9 @@ class _AllFilesViewState extends State<AllFilesView> {
                     return SortOption.values.map((option) {
                       final isSelected = viewModel.currentSort == option;
                       final textMapping = {
+                        SortOption.filename: 'Name',
                         SortOption.dateModified: 'Date modified',
                         SortOption.size: 'Size',
-                        SortOption.filename: 'Filename',
                         SortOption.type: 'Type',
                       };
                       return PopupMenuItem<SortOption>(
@@ -539,16 +616,19 @@ class _AllFilesViewState extends State<AllFilesView> {
                               textMapping[option]!,
                               style: TextStyle(
                                 color: isSelected
-                                    ? Colors.blue.shade400
+                                    ? AppTheme.accentLime
                                     : Colors.white,
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.normal,
                               ),
                             ),
                             if (isSelected)
                               Icon(
                                 viewModel.isDescending
-                                    ? Icons.arrow_downward
-                                    : Icons.arrow_upward,
-                                color: Colors.blue.shade400,
+                                    ? Icons.arrow_downward_rounded
+                                    : Icons.arrow_upward_rounded,
+                                color: AppTheme.accentLime,
                                 size: 16,
                               ),
                           ],
@@ -557,27 +637,30 @@ class _AllFilesViewState extends State<AllFilesView> {
                     }).toList();
                   },
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         _getSortText(viewModel.currentSort),
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const SizedBox(width: 4),
                       Icon(
                         viewModel.isDescending
-                            ? Icons.arrow_drop_down
-                            : Icons.arrow_drop_up,
-                        color: Colors.white,
-                        size: 20,
+                            ? Icons.arrow_downward_rounded
+                            : Icons.arrow_upward_rounded,
+                        color: AppTheme.accentLime,
+                        size: 16,
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
           ],
         ),
       ),
@@ -586,12 +669,12 @@ class _AllFilesViewState extends State<AllFilesView> {
 
   String _getSortText(SortOption option) {
     switch (option) {
+      case SortOption.filename:
+        return 'Name';
       case SortOption.dateModified:
         return 'Date modified';
       case SortOption.size:
         return 'Size';
-      case SortOption.filename:
-        return 'Filename';
       case SortOption.type:
         return 'Type';
     }
@@ -612,7 +695,7 @@ class _AllFilesViewState extends State<AllFilesView> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF1C1C1E),
+              backgroundColor: const Color(0xFF16191E),
               title: Text(
                 'New $typeName',
                 style: const TextStyle(color: Colors.white),
@@ -620,17 +703,17 @@ class _AllFilesViewState extends State<AllFilesView> {
               content: TextField(
                 controller: _controller,
                 autofocus: true,
-                cursorColor: Colors.blue.shade400,
+                cursorColor: AppTheme.accentLime,
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   hintText: 'Enter $typeName name',
                   hintStyle: const TextStyle(color: Colors.white54),
                   errorText: errorMessage,
-                  enabledBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue.shade400),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF4A525A)),
                   ),
-                  focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue.shade400),
+                  focusedBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: AppTheme.accentLime),
                   ),
                 ),
               ),
@@ -666,9 +749,12 @@ class _AllFilesViewState extends State<AllFilesView> {
                       });
                     }
                   },
-                  child: Text(
+                  child: const Text(
                     'Create',
-                    style: TextStyle(color: Colors.blue.shade400),
+                    style: TextStyle(
+                      color: AppTheme.accentLime,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -681,9 +767,9 @@ class _AllFilesViewState extends State<AllFilesView> {
 
   Widget _buildPasteNavBar(BuildContext context, AllFilesViewModel viewModel) {
     return BottomNavigationBar(
-      backgroundColor: const Color(0xFF1C1C1E),
-      selectedItemColor: Colors.white,
-      unselectedItemColor: Colors.white,
+      backgroundColor: const Color(0xFF0E1114),
+      selectedItemColor: AppTheme.accentLime,
+      unselectedItemColor: const Color(0xFF78828A),
       showUnselectedLabels: true,
       type: BottomNavigationBarType.fixed,
       items: const [
@@ -730,9 +816,9 @@ class _AllFilesViewState extends State<AllFilesView> {
     AllFilesViewModel viewModel,
   ) {
     return BottomNavigationBar(
-      backgroundColor: const Color(0xFF1C1C1E),
-      selectedItemColor: Colors.white,
-      unselectedItemColor: Colors.white,
+      backgroundColor: const Color(0xFF0E1114),
+      selectedItemColor: AppTheme.accentLime,
+      unselectedItemColor: const Color(0xFF78828A),
       showUnselectedLabels: true,
       type: BottomNavigationBarType.fixed,
       items: const [
@@ -884,20 +970,21 @@ class _AllFilesViewState extends State<AllFilesView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C1E),
+        backgroundColor: const Color(0xFF16191E),
         title: const Text('Rename', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: textController,
           autofocus: true,
+          cursorColor: AppTheme.accentLime,
           style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             hintText: 'New name',
-            hintStyle: const TextStyle(color: Colors.white54),
-            enabledBorder: const UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white54),
+            hintStyle: TextStyle(color: Colors.white54),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF4A525A)),
             ),
             focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.blue.shade400),
+              borderSide: BorderSide(color: AppTheme.accentLime),
             ),
           ),
         ),
@@ -924,9 +1011,12 @@ class _AllFilesViewState extends State<AllFilesView> {
                 Navigator.pop(ctx);
               }
             },
-            child: Text(
+            child: const Text(
               'Ok',
-              style: TextStyle(color: Colors.blue.shade400),
+              style: TextStyle(
+                color: AppTheme.accentLime,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -944,7 +1034,7 @@ class _AllFilesViewState extends State<AllFilesView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C1E),
+        backgroundColor: const Color(0xFF16191E),
         title: const Text('Details', style: TextStyle(color: Colors.white)),
         content: SingleChildScrollView(
           child: Column(
@@ -977,9 +1067,12 @@ class _AllFilesViewState extends State<AllFilesView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text(
+            child: const Text(
               'Ok',
-              style: TextStyle(color: Colors.blue.shade400),
+              style: TextStyle(
+                color: AppTheme.accentLime,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -999,94 +1092,107 @@ class _FileListItem extends StatelessWidget {
     final dateStr = viewModel.formatDateString(item.modifiedDate);
     final countStr = item.isDirectory
         ? '${item.itemCount} item${item.itemCount == 1 ? '' : 's'}'
-        : item.categoryHint; // Or file size later
+        : (item.categoryHint.isNotEmpty ? item.categoryHint : 'File');
+    final subtitle = '$countStr · $dateStr';
 
     final isSelected = viewModel.selectedPaths.contains(item.path);
 
-    return InkWell(
-      onTap: () {
-        if (viewModel.isSelectionMode ||
-            (viewModel.isFolderPickerMode && item.isDirectory)) {
-          viewModel.toggleSelection(item.path);
-        } else if (item.isDirectory) {
-          viewModel.navigateTo(item.path);
-        } else {
-          FileOpener.openFile(context, item.path);
-        }
-      },
-      onLongPress: () {
-        if (!viewModel.isSelectionMode) {
-          viewModel.toggleSelectionMode();
-          viewModel.toggleSelection(item.path);
-        }
-      },
-      child: Container(
-        color: isSelected ? Colors.white.withOpacity(0.05) : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        child: Row(
-          children: [
-            _buildIcon(),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '$countStr  |  $dateStr',
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () {
             if (viewModel.isSelectionMode ||
-                (viewModel.isFolderPickerMode && item.isDirectory))
-              Icon(
-                isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-                color: isSelected ? Colors.blue.shade400 : Colors.white54,
-              )
-            else
-              const Icon(
-                Icons.chevron_right,
-                color: Colors.white54,
-                size: 20,
-              ),
-          ],
+                (viewModel.isFolderPickerMode && item.isDirectory)) {
+              viewModel.toggleSelection(item.path);
+            } else if (item.isDirectory) {
+              viewModel.navigateTo(item.path);
+            } else {
+              FileOpener.openFile(context, item.path);
+            }
+          },
+          onLongPress: () {
+            if (!viewModel.isSelectionMode) {
+              viewModel.toggleSelectionMode();
+              viewModel.toggleSelection(item.path);
+            }
+          },
+          child: Container(
+            color: isSelected ? Colors.white.withOpacity(0.06) : Colors.transparent,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 13.0),
+            child: Row(
+              children: [
+                _buildIcon(),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: Color(0xFF78828A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (viewModel.isSelectionMode ||
+                    (viewModel.isFolderPickerMode && item.isDirectory))
+                  Icon(
+                    isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                    color: isSelected ? AppTheme.accentLime : const Color(0xFF4A525A),
+                    size: 22,
+                  )
+                else
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFF4A525A),
+                    size: 20,
+                  ),
+              ],
+            ),
+          ),
         ),
-      ),
+        const Divider(
+          height: 1,
+          thickness: 1,
+          color: Color(0xFF14171B),
+        ),
+      ],
     );
   }
 
   Widget _buildIcon() {
-    // Generate the blue folder icon like the screenshot
-    IconData centerIcon = Icons.folder;
-    Color iconColor = Colors.blue.shade400; // Light cyan/blue folder
-
-    if (item.categoryHint == 'download') {
-      // centerIcon = Icons.download_rounded; // Removed custom icon
-    } else if (item.categoryHint == 'document') {
-      // centerIcon = Icons.description; // Removed custom icon
+    if (item.isDirectory) {
+      final hasItems = item.itemCount > 0;
+      final folderColor = hasItems ? AppTheme.accentLime : const Color(0xFF4A525A);
+      return Icon(
+        Icons.folder_rounded,
+        color: folderColor,
+        size: 34,
+      );
     }
 
-    if (!item.isDirectory) {
-      centerIcon = Icons.insert_drive_file;
-      iconColor = Colors.grey;
-    }
-
-    return Icon(centerIcon, color: iconColor, size: 48);
+    return const Icon(
+      Icons.insert_drive_file_rounded,
+      color: Color(0xFF78828A),
+      size: 30,
+    );
   }
 }
 
@@ -1100,7 +1206,7 @@ class _FileGridItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final countStr = item.isDirectory
         ? '${item.itemCount} item${item.itemCount == 1 ? '' : 's'}'
-        : item.categoryHint;
+        : (item.categoryHint.isNotEmpty ? item.categoryHint : 'File');
 
     final isSelected = viewModel.selectedPaths.contains(item.path);
 
@@ -1123,11 +1229,12 @@ class _FileGridItem extends StatelessWidget {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white.withOpacity(0.05) : Colors.transparent,
+          color: isSelected ? Colors.white.withOpacity(0.06) : const Color(0xFF0E1114),
           borderRadius: BorderRadius.circular(12),
-          border: isSelected
-              ? Border.all(color: Colors.blue.shade400, width: 2)
-              : null,
+          border: Border.all(
+            color: isSelected ? AppTheme.accentLime : const Color(0xFF1A1F26),
+            width: isSelected ? 1.5 : 1,
+          ),
         ),
         child: Stack(
           alignment: Alignment.center,
@@ -1144,7 +1251,7 @@ class _FileGridItem extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1158,7 +1265,7 @@ class _FileGridItem extends StatelessWidget {
                     Text(
                       countStr,
                       style: const TextStyle(
-                        color: Colors.white54,
+                        color: Color(0xFF78828A),
                         fontSize: 12,
                       ),
                     ),
@@ -1166,12 +1273,12 @@ class _FileGridItem extends StatelessWidget {
                       const SizedBox(width: 4),
                       Icon(
                         isSelected
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank,
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked,
                         color: isSelected
-                            ? Colors.blue.shade400
-                            : Colors.white54,
-                        size: 18,
+                            ? AppTheme.accentLime
+                            : const Color(0xFF4A525A),
+                        size: 16,
                       ),
                     ],
                   ],
@@ -1183,8 +1290,8 @@ class _FileGridItem extends StatelessWidget {
                 top: 4,
                 right: 4,
                 child: Icon(
-                  isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-                  color: isSelected ? Colors.blue.shade400 : Colors.white54,
+                  isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                  color: isSelected ? AppTheme.accentLime : const Color(0xFF4A525A),
                   size: 20,
                 ),
               ),
@@ -1195,15 +1302,17 @@ class _FileGridItem extends StatelessWidget {
   }
 
   Widget _buildIcon() {
-    IconData centerIcon = Icons.folder;
-    Color iconColor = Colors.blue.shade400;
-
-    if (!item.isDirectory) {
-      centerIcon = Icons.insert_drive_file;
-      iconColor = Colors.grey;
+    if (item.isDirectory) {
+      final hasItems = item.itemCount > 0;
+      final folderColor = hasItems ? AppTheme.accentLime : const Color(0xFF4A525A);
+      return Icon(Icons.folder_rounded, color: folderColor, size: 48);
     }
 
-    return Icon(centerIcon, color: iconColor, size: 56);
+    return const Icon(
+      Icons.insert_drive_file_rounded,
+      color: Color(0xFF78828A),
+      size: 44,
+    );
   }
 }
 
@@ -1216,7 +1325,7 @@ class PasteProgressDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF1C1C1E),
+      backgroundColor: const Color(0xFF16191E),
       title: const Text('Pasting Files', style: TextStyle(color: Colors.white)),
       content: ListenableBuilder(
         listenable: viewModel,
@@ -1236,9 +1345,9 @@ class PasteProgressDialog extends StatelessWidget {
                 value: viewModel.pasteProgress > 0
                     ? viewModel.pasteProgress
                     : null,
-                backgroundColor: Colors.black,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Colors.blue.shade400,
+                backgroundColor: const Color(0xFF14171B),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppTheme.accentLime,
                 ),
               ),
               const SizedBox(height: 8),

@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // True Black color palette based on requirements
+  // True Black & Lime Obsidian color palette
   static const Color backgroundBlack = Color(0xFF000000);
+  static const Color obsidianBlack = Color(0xFF000000);
+  static const Color surfaceDark = Color(0xFF14171B);
+  static const Color surfaceCard = Color(0xFF16191D);
   static const Color cardGrey = Color(0xFF1B1B1B);
-  static const Color accentBlue = Color(
-    0xFF6EBEFB,
-  ); // Matched to the Folder Cyan hue
+  static const Color accentLime = Color(0xFFC6F36B);
+  static const Color accentBlue = Color(0xFF6EBEFB);
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGrey = Color(0xFFAAAAAA);
+  static const Color textMuted = Color(0xFF8E959E);
+  static const Color borderDark = Color(0xFF1E2228);
 
   static ThemeData get trueBlackTheme {
     return ThemeData(

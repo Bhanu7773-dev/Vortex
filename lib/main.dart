@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:vortex/services/discovery_service.dart';
 import 'package:vortex/services/connection_manager.dart';
 import 'package:vortex/services/transfer_service.dart';
+import 'package:vortex/services/web_share_service.dart';
 import 'package:vortex/theme/app_theme.dart';
 import 'package:vortex/views/main_view.dart';
 
@@ -13,6 +14,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => DiscoveryService()),
         ChangeNotifierProvider(create: (_) => ConnectionManager()),
         ChangeNotifierProvider(create: (_) => TransferService()),
+        ChangeNotifierProvider(create: (_) => WebShareService()),
       ],
       child: const VortexApp(),
     ),
@@ -20,7 +22,7 @@ void main() {
 }
 
 class VortexApp extends StatelessWidget {
-  const VortexApp({Key? key}) : super(key: key);
+  const VortexApp({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../widgets/share_sheet.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/photos_viewmodel.dart';
+import '../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────
 //  Photos - Album Grid screen
@@ -18,74 +19,186 @@ class PhotosView extends StatelessWidget {
       create: (_) => PhotosViewModel(),
       child: Consumer<PhotosViewModel>(
         builder: (context, viewModel, _) {
+          final albums = viewModel.albums;
+          final featuredAlbum = albums.isNotEmpty ? albums.first : null;
+          final gridAlbums =
+              albums.length > 1 ? albums.sublist(1) : <PhotoAlbum>[];
+
           return Scaffold(
             backgroundColor: Colors.black,
             appBar: AppBar(
               backgroundColor: Colors.black,
               elevation: 0,
+              scrolledUnderElevation: 0,
+              toolbarHeight: 68,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
                 onPressed: () => Navigator.pop(context),
               ),
-              title: const Text(
-                'Photos',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+              titleSpacing: 0,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Photos',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${albums.length} album${albums.length == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      color: Color(0xFF78828A),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
-              actions: [],
             ),
             body: viewModel.isLoading
-                ? Center(
+                ? const Center(
                     child: CircularProgressIndicator(
-                      color: Colors.blue.shade400,
+                      color: AppTheme.accentLime,
                     ),
                   )
-                : viewModel.albums.isEmpty
-                ? Center(
+                : albums.isEmpty
+                ? const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
                           Icons.image_not_supported_outlined,
-                          size: 80,
-                          color: Colors.white54,
+                          size: 72,
+                          color: Color(0xFF78828A),
                         ),
                         SizedBox(height: 16),
                         Text(
                           'No photos found',
                           style: TextStyle(
-                            color: Colors.white54,
+                            color: Color(0xFF78828A),
                             fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
                   )
-                : GridView.builder(
-                    padding: const EdgeInsets.all(12),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          childAspectRatio: 0.82,
-                        ),
-                    itemCount: viewModel.albums.length,
-                    itemBuilder: (context, index) {
-                      final album = viewModel.albums[index];
-                      return _AlbumCard(
-                        album: album,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PhotoAlbumDetailView(album: album),
+                : CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      if (featuredAlbum != null)
+                        SliverToBoxAdapter(
+                          child: GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    PhotoAlbumDetailView(album: featuredAlbum),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Large Hero Banner Card
+                                  Container(
+                                    height: 200,
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF14171B),
+                                      borderRadius: BorderRadius.circular(24),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Image.file(
+                                      featuredAlbum.coverPhoto,
+                                      fit: BoxFit.cover,
+                                      cacheWidth: 800,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: const Color(0xFF14171B),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.image_outlined,
+                                            color: Color(0xFF2E333B),
+                                            size: 54,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 14),
+                                  // Title + Bold Lime Count Row
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          featuredAlbum.name,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.3,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        '${featuredAlbum.count}',
+                                        style: const TextStyle(
+                                          color: AppTheme.accentLime,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: -0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                      );
-                    },
+                      if (gridAlbums.isNotEmpty)
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 3,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 16,
+                                  childAspectRatio: 0.72,
+                                ),
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final album = gridAlbums[index];
+                                return _AlbumCard(
+                                  album: album,
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          PhotoAlbumDetailView(album: album),
+                                    ),
+                                  ),
+                                );
+                              },
+                              childCount: gridAlbums.length,
+                            ),
+                          ),
+                        ),
+                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    ],
                   ),
           );
         },
@@ -107,37 +220,51 @@ class _AlbumCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF14171B),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              clipBehavior: Clip.antiAlias,
               child: Image.file(
                 album.coverPhoto,
                 fit: BoxFit.cover,
                 width: double.infinity,
-                cacheWidth: 300,
+                height: double.infinity,
+                cacheWidth: 320,
                 errorBuilder: (_, __, ___) => Container(
-                  color: Colors.white.withOpacity(0.05),
-                  child: const Icon(
-                    Icons.broken_image,
-                    color: Colors.white54,
+                  color: const Color(0xFF14171B),
+                  child: const Center(
+                    child: Icon(
+                      Icons.image_outlined,
+                      color: Color(0xFF2E333B),
+                      size: 28,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             album.name,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.2,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          const SizedBox(height: 2),
           Text(
             '${album.count}',
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
+            style: const TextStyle(
+              color: Color(0xFF78828A),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

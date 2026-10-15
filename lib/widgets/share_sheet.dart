@@ -9,6 +9,8 @@ import 'package:provider/provider.dart';
 import 'package:vortex/services/connection_manager.dart';
 import 'package:vortex/services/discovery_service.dart';
 import 'package:vortex/services/transfer_service.dart';
+import 'package:vortex/services/web_share_service.dart';
+import 'package:vortex/views/web_share_view.dart';
 import 'package:vortex/theme/app_theme.dart';
 
 /// Shows the Vortex "Send via Vortex" bottom sheet.
@@ -253,6 +255,33 @@ class _ShareSheetContentState extends State<ShareSheetContent> {
                   ),
                 ),
               ],
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF00E5FF), width: 1.2),
+                    foregroundColor: const Color(0xFF00E5FF),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.language_rounded, size: 18),
+                  label: const Text(
+                    'Share via Web Browser (No App Needed)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  onPressed: () {
+                    context.read<WebShareService>().addFiles(widget.selectedPaths);
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const WebShareView()),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
         ),
