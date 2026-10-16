@@ -8,8 +8,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:path_provider/path_provider.dart';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 String _fmtSpeed(double bps) {
   if (bps >= 1024 * 1024) {
     return '${(bps / (1024 * 1024)).toStringAsFixed(1)} MB/s';
@@ -29,8 +27,6 @@ String _fmtBytes(int bytes) {
   }
   return '$bytes B';
 }
-
-// ─── Speed sampler ───────────────────────────────────────────────────────────
 
 /// Rolling speed measurement. Call [record] with cumulative byte count;
 /// read [bytesPerSec] for the current sample.
@@ -52,16 +48,12 @@ class _SpeedSampler {
   }
 }
 
-// ─── Internal file ────────────────────────────────────────────────────────────
-
 /// One file being tracked in a transfer job.
 class _TransferFile {
   final File file;
-  final String relativePath; // e.g. "Music/Album/song.mp3"
+  final String relativePath;
   _TransferFile({required this.file, required this.relativePath});
 }
-
-// ─── Outgoing job ─────────────────────────────────────────────────────────────
 
 /// State of a single outgoing transfer job (one job = one target device).
 class TransferJob {
@@ -125,8 +117,6 @@ class TransferJob {
   }
 }
 
-// ─── Incoming job ─────────────────────────────────────────────────────────────
-
 class ReceiveJob {
   final String id;
   final String relativePath;
@@ -137,7 +127,7 @@ class ReceiveJob {
   bool isComplete;
   bool hasError;
   bool cancelled;
-  bool isSaving; // all bytes received, file is being flushed to disk
+  bool isSaving;
   String? savedPath;
   final DateTime startedAt;
 
@@ -174,14 +164,11 @@ class ReceiveJob {
   }
 }
 
-// ─── TransferService ─────────────────────────────────────────────────────────
-
 class TransferService extends ChangeNotifier {
-  static const int _notifyThresholdBytes = 512 * 1024; // notify UI every 512 KB
+  static const int _notifyThresholdBytes = 512 * 1024;
 
   bool _disposed = false;
 
-  // ── Outgoing ────────────────────────────────────────────────────────────────
   final List<TransferJob> jobs = [];
 
   /// The currently active multi-channel sender, if any.
@@ -192,7 +179,6 @@ class TransferService extends ChangeNotifier {
       jobs.where((j) => !j.isComplete && !j.cancelled).firstOrNull;
   bool get hasActiveJob => activeJob != null;
 
-  // ── Incoming ────────────────────────────────────────────────────────────────
   final List<ReceiveJob> receiveJobs = [];
 
   bool get hasActiveReceive =>
@@ -203,8 +189,6 @@ class TransferService extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
-
-  // ── Safe notify ─────────────────────────────────────────────────────────────
 
   void _safeNotify() {
     final phase = SchedulerBinding.instance.schedulerPhase;
@@ -217,10 +201,6 @@ class TransferService extends ChangeNotifier {
       if (!_disposed) notifyListeners();
     }
   }
-
-  // ------------------------------------------------------------------
-  // Send
-  // ------------------------------------------------------------------
 
   /// Entry point: send [selectedPaths] (files and/or folders) to one device.
   /// Automatically uses multi-channel mode when the ConnectionManager has
@@ -250,7 +230,6 @@ class TransferService extends ChangeNotifier {
     jobs.add(job);
     _safeNotify();
 
-    // ── Try multi-channel first ───────────────────────────────────────────
     if (connectionManager != null) {
       try {
         final mcResult = await _trySendMultiChannel(
@@ -269,7 +248,6 @@ class TransferService extends ChangeNotifier {
       }
     }
 
-    // ── Fallback: single-channel TCP ──────────────────────────────────────
     for (int i = 0; i < files.length; i++) {
       final tf = files[i];
       if (job.cancelled) break;
@@ -293,7 +271,6 @@ class TransferService extends ChangeNotifier {
     required String deviceName,
     required ConnectionManager connectionManager,
   }) async {
-    // Build the file manifest for negotiation
     final fileManifest = <Map<String, dynamic>>[];
     for (final tf in files) {
       final stat = await tf.file.stat();
@@ -304,7 +281,6 @@ class TransferService extends ChangeNotifier {
       });
     }
 
-    // Request multi-channel from the receiver via WebSocket
     final response = await connectionManager.requestMultiChannel(
       deviceName: deviceName,
       files: fileManifest,
@@ -316,7 +292,6 @@ class TransferService extends ChangeNotifier {
 
     if (receiverChannels.isEmpty) return false;
 
-    // Map receiver IPs to our target list
     final targetIps = receiverChannels.map((e) => e.ip).toList();
 
     debugPrint(
@@ -352,10 +327,8 @@ class TransferService extends ChangeNotifier {
       },
     );
 
-    // Store reference so cancelJob() can kill the isolates.
     _activeMcSender = sender;
 
-    // Start the multi-channel sender
     sender.start();
 
     return completer.future;
@@ -382,7 +355,7 @@ class TransferService extends ChangeNotifier {
 
   /// High-speed raw TCP sender.  Opens a direct socket, writes a JSON
   /// header line, then streams the file in large chunks.
-  static const int _tcpChunkSize = 1024 * 1024; // 1 MB chunks for throughput
+  static const int _tcpChunkSize = 1024 * 1024;
 
   Future<void> _sendFileTcp(
     _TransferFile tf,
@@ -398,9 +371,6 @@ class TransferService extends ChangeNotifier {
       );
       socket.setOption(SocketOption.tcpNoDelay, true);
 
-      // Absorb async write errors (broken pipe, connection reset) so they
-      // don't surface as unhandled exceptions.  The await-flush below will
-      // still rethrow them synchronously where we can catch them.
       bool pipeError = false;
       socket.done.catchError((e) {
         pipeError = true;
@@ -409,11 +379,9 @@ class TransferService extends ChangeNotifier {
 
       final fileLength = await tf.file.length();
 
-      // ── Send JSON header terminated by newline ─────────────────────────
       final header = jsonEncode({'path': tf.relativePath, 'size': fileLength});
       socket.add(utf8.encode('$header\n'));
 
-      // ── Stream file bytes in large chunks ──────────────────────────────
       int pendingNotify = 0;
       final raf = await tf.file.open(mode: FileMode.read);
       try {
@@ -422,9 +390,6 @@ class TransferService extends ChangeNotifier {
           final chunk = await raf.read(_tcpChunkSize);
           if (chunk.isEmpty) break;
           socket.add(chunk);
-          // NO flush() here — let the OS TCP window manage backpressure.
-          // A per-chunk flush causes stop-and-wait behavior that tanks
-          // throughput over USB tethering (NAT adds 1–5 ms per round-trip).
 
           job.addSentBytes(chunk.length);
           pendingNotify += chunk.length;
@@ -437,17 +402,14 @@ class TransferService extends ChangeNotifier {
         await raf.close();
       }
 
-      if (pipeError) return; // receiver already gone, skip flush/ACK
+      if (pipeError) return;
 
-      // Single flush after ALL chunks — drains Dart's outgoing buffer.
       await socket.flush();
 
       if (!job.cancelled) {
-        // Wait for single-byte ACK (0x06) from receiver, with a timeout.
         try {
           await socket.first.timeout(const Duration(seconds: 30));
         } catch (_) {
-          // Timeout or stream closed — treat as success for robustness.
         }
         job.completedFiles++;
         _safeNotify();
@@ -456,16 +418,11 @@ class TransferService extends ChangeNotifier {
       debugPrint('[TCP Send] Error sending ${tf.relativePath}: $e');
       rethrow;
     } finally {
-      // destroy() force-closes without trying to flush (avoids double errors).
       try {
         socket?.destroy();
       } catch (_) {}
     }
   }
-
-  // ------------------------------------------------------------------
-  // Receive-side callbacks (called by ConnectionManager via main_view wiring)
-  // ------------------------------------------------------------------
 
   /// Called before the first byte arrives. [totalBytes] is -1 if unknown.
   ReceiveJob startReceive({
@@ -473,8 +430,6 @@ class TransferService extends ChangeNotifier {
     required String relativePath,
     required int totalBytes,
   }) {
-    // Remove stale unfinished jobs for the same file label so retry sessions
-    // don't leave old 0%-progress cards that shadow current progress.
     receiveJobs.removeWhere(
       (j) =>
           !j.isComplete &&
@@ -487,7 +442,6 @@ class TransferService extends ChangeNotifier {
       relativePath: relativePath,
       totalBytes: totalBytes,
     );
-    // Newest first improves visibility of active retried transfers.
     receiveJobs.insert(0, job);
     _safeNotify();
     return job;
@@ -536,7 +490,6 @@ class TransferService extends ChangeNotifier {
         connectionManager.cancelReceiveJob(job.id);
       }
     }
-    // Also explicitly tell connection manager to cancel any active HTTP uploads
     connectionManager.cancelReceiveJob('');
     _safeNotify();
   }
@@ -553,9 +506,7 @@ class TransferService extends ChangeNotifier {
       job.hasError = true;
       job.cancelMessage = 'Cancelled';
     }
-    // Explicitly notify connectionManager for this specific job
     connectionManager.cancelReceiveJob(id);
-    // Cancel any other queued receives together
     cancelAllReceives(connectionManager: connectionManager);
   }
 
@@ -577,15 +528,10 @@ class TransferService extends ChangeNotifier {
     job.cancelled = true;
     job.isComplete = true;
     job.cancelMessage = 'Cancelled by receiver';
-    // Kill multi-channel sender if running.
     _activeMcSender?.cancel();
     _activeMcSender = null;
     _safeNotify();
   }
-
-  // ------------------------------------------------------------------
-  // Receive-side: save directory helper (used by ConnectionManager)
-  // ------------------------------------------------------------------
 
   /// Returns (and creates) the folder where received files are saved.
   static Future<Directory> getReceiveDir() async {
@@ -600,10 +546,6 @@ class TransferService extends ChangeNotifier {
     if (!dir.existsSync()) await dir.create(recursive: true);
     return dir;
   }
-
-  // ------------------------------------------------------------------
-  // Helpers
-  // ------------------------------------------------------------------
 
   /// Flatten files + folders into individual files with relative paths.
   Future<List<_TransferFile>> _expandPaths(List<String> paths) async {
@@ -647,16 +589,11 @@ class TransferService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // ------------------------------------------------------------------
-  // Job management
-  // ------------------------------------------------------------------
-
   void cancelJob(String jobId) {
     final job = jobs.where((j) => j.id == jobId).firstOrNull;
     if (job != null && !job.isComplete) {
       job.cancelled = true;
       job.isComplete = true;
-      // Kill the multi-channel sender isolates if active.
       _activeMcSender?.cancel();
       _activeMcSender = null;
       _safeNotify();

@@ -11,44 +11,31 @@ import 'transfer_service.dart';
 import 'multi_channel_transfer.dart';
 
 class ConnectionManager extends ChangeNotifier {
-  // Fixed port so it can be opened in the OS firewall once and for all.
-  // UDP discovery uses 46465; the HTTP/WebSocket server uses 46466.
-  // Raw TCP file transfer uses 46467 for maximum throughput.
   static const int serverFixedPort = 46466;
   static const int tcpTransferPort = 46467;
 
   HttpServer? _httpServer;
   ServerSocket? _tcpServer;
 
-  // ── Multi-channel (HybridFileXfer-style) state ──────────────────────────
   MultiChannelReceiver? _activeMultiReceiver;
 
   /// Cached network endpoints for this device (populated on server start).
   List<ChannelEndpoint> _localEndpoints = [];
   List<ChannelEndpoint> get localEndpoints => _localEndpoints;
 
-  // Active incoming TCP sockets keyed by receive-job ID so they can be
-  // cancelled from the UI.
   final Map<String, Socket> _activeReceiveSockets = {};
 
-  // Active incoming HTTP uploads (Web Share) keyed by receive-job ID.
   final Map<String, HttpRequest> _activeHttpUploads = {};
   final Set<String> _cancelledHttpUploadIds = {};
 
-  // Maps deviceName -> WebSocketChannel
   final Map<String, WebSocketChannel> _activeChannels = {};
 
-  // Channels that were intentionally replaced (not disconnected) — their
-  // onDone callbacks should be ignored so the new channel isn't evicted.
   final Set<WebSocketChannel> _replacedChannels = {};
 
-  // Maps deviceName -> IP address (populated when a WebSocket is established)
   final Map<String, String> _deviceIps = {};
 
-  // Maps deviceName -> all known IPs (populated from Via Both QR with multiple IPs)
   final Map<String, List<String>> _deviceAllIps = {};
 
-  // Maps deviceName -> connection mode: 'both' | 'wifi' | 'usb' | 'auto'
   final Map<String, String> _deviceConnectionMode = {};
 
   /// Returns the connection mode label for [deviceName].
@@ -63,13 +50,10 @@ class ConnectionManager extends ChangeNotifier {
     return primary != null ? [primary] : [];
   }
 
-  // Token used for QR scanning/manual entry
   late String qrToken;
 
-  // Callback when WebSocket is successfully connected
   VoidCallback? onConnectionEstablished;
 
-  // Callback when a file is fully received: (relativePath, savedPath)
   Function(String relativePath, String savedPath)? onFileReceived;
 
   /// Fired on the RECEIVER device when the sender cancels the transfer.
@@ -78,7 +62,6 @@ class ConnectionManager extends ChangeNotifier {
   /// Fired on the SENDER device when the receiver cancels the transfer.
   VoidCallback? onReceiverCancelledTransfer;
 
-  // Progress callbacks for incoming receive
   Function(String id, String relativePath, int totalBytes)? onFileReceiveStart;
   Function(String id, int receivedBytes)? onFileReceiveProgress;
 
@@ -103,7 +86,6 @@ class ConnectionManager extends ChangeNotifier {
 
   ConnectionManager() {
     deviceId = _uuid.v4();
-    // Generate a new 6-digit token for this session
     qrToken = (Random().nextInt(900000) + 100000).toString();
   }
 
@@ -114,7 +96,6 @@ class ConnectionManager extends ChangeNotifier {
   Future<void> startServer() async {
     if (_httpServer != null) return;
 
-    // Cache local network interfaces for multi-channel transfers
     _localEndpoints = await enumerateInterfaces();
     debugPrint(
       '[Vortex] Local interfaces: ${_localEndpoints.map((e) => '${e.name}=${e.ip}').join(', ')}',
@@ -124,12 +105,11 @@ class ConnectionManager extends ChangeNotifier {
       _httpServer = await HttpServer.bind(
         InternetAddress.anyIPv4,
         serverFixedPort,
-        shared: true, // allows re-binding after hot-restart
+        shared: true,
       );
       debugPrint('Vortex Server listening on port: ${_httpServer!.port}');
 
       _httpServer!.listen((HttpRequest request) async {
-        // Allow cross-origin requests for browser clients
         request.response.headers.set('Access-Control-Allow-Origin', '*');
         request.response.headers.set(
           'Access-Control-Allow-Methods',
@@ -149,7 +129,6 @@ class ConnectionManager extends ChangeNotifier {
         } else if (request.uri.path == '/upload' && request.method == 'POST') {
           await _handleUpload(request);
         } else if (webShareHandler != null && await webShareHandler!(request)) {
-          // Handled by webShareHandler
         } else {
           request.response
             ..statusCode = HttpStatus.notFound
@@ -160,7 +139,6 @@ class ConnectionManager extends ChangeNotifier {
       debugPrint('Failed to start server: $e');
     }
 
-    // ── Raw TCP transfer server (high-speed) ──────────────────────────────
     try {
       _tcpServer = await ServerSocket.bind(
         InternetAddress.anyIPv4,
@@ -174,18 +152,15 @@ class ConnectionManager extends ChangeNotifier {
     }
   }
 
-  // ── Raw TCP file receive handler ──────────────────────────────────────────
   void _handleTcpClient(Socket socket) async {
     final jobId = _uuid.v4();
     _activeReceiveSockets[jobId] = socket;
 
-    // Disable Nagle for lower latency ACK.
     socket.setOption(SocketOption.tcpNoDelay, true);
 
     try {
-      // ── Phase 1: read the JSON header (everything up to first '\n') ────
       final headerBytes = <int>[];
-      List<int>? leftover; // bytes after '\n' that belong to the file
+      List<int>? leftover;
       bool headerDone = false;
 
       final completer = Completer<void>();
@@ -196,7 +171,6 @@ class ConnectionManager extends ChangeNotifier {
           if (headerDone) return;
           for (int i = 0; i < chunk.length; i++) {
             if (chunk[i] == 0x0A) {
-              // '\n'
               headerDone = true;
               if (i + 1 < chunk.length) {
                 leftover = chunk.sublist(i + 1);
@@ -229,7 +203,6 @@ class ConnectionManager extends ChangeNotifier {
       final relativePath = header['path'] as String? ?? 'received_file';
       final totalBytes = header['size'] as int? ?? -1;
 
-      // ── Prepare destination file ──────────────────────────────────────
       final saveDir = await TransferService.getReceiveDir();
       final parts = relativePath.split('/');
       final fileName = parts.last;
@@ -247,7 +220,6 @@ class ConnectionManager extends ChangeNotifier {
 
       onFileReceiveStart?.call(jobId, relativePath, totalBytes);
 
-      // ── Phase 2: stream file bytes (reuse the SAME subscription) ──────
       int received = 0;
       bool cancelled = false;
 
@@ -275,7 +247,6 @@ class ConnectionManager extends ChangeNotifier {
             sub.cancel();
             if (!dataCompleter.isCompleted) dataCompleter.complete();
           } else if (pendingNotify >= 65536) {
-            // 64KB trigger
             pendingNotify = 0;
             onFileReceiveProgress?.call(jobId, received);
           }
@@ -286,9 +257,6 @@ class ConnectionManager extends ChangeNotifier {
           if (!dataCompleter.isCompleted) dataCompleter.complete();
         });
         sub.onDone(() {
-          // If the job was removed from _activeReceiveSockets before onDone
-          // fires, it means cancelReceiveJob() destroyed the socket — treat
-          // as cancellation rather than a clean EOF.
           if (!_activeReceiveSockets.containsKey(jobId)) {
             cancelled = true;
           }
@@ -303,16 +271,13 @@ class ConnectionManager extends ChangeNotifier {
       await sink.close();
 
       if (cancelled) {
-        // Delete the partial file so it doesn't litter the receive folder.
         try { await file.delete(); } catch (_) {}
         _activeReceiveSockets.remove(jobId);
         return;
       }
 
-      // All bytes are in the sink — notify the UI to show "Saving…"
       onFileReceiveSaving?.call(jobId);
 
-      // Send single ACK byte to let sender know we saved exactly what they sent.
       socket.add([0x06]);
       onFileReceiveComplete?.call(jobId, relativePath, file.path);
       _activeReceiveSockets.remove(jobId);
@@ -330,14 +295,12 @@ class ConnectionManager extends ChangeNotifier {
 
   /// Cancel an active receive job by jobId (closes socket) and notify the sender.
   void cancelReceiveJob(String jobId) {
-    // Single-channel TCP receive
     final sock = _activeReceiveSockets.remove(jobId);
     if (sock != null) {
       try {
         sock.destroy();
       } catch (_) {}
     }
-    // HTTP upload receive (Web Share)
     _lastHttpUploadCancelTime = DateTime.now();
     debugPrint(
       '[ConnectionManager] cancelReceiveJob($jobId) called. Cancelling ${_activeHttpUploads.length} active uploads.',
@@ -363,13 +326,11 @@ class ConnectionManager extends ChangeNotifier {
         } catch (_) {}
       }
     }
-    // Multi-channel receive
     if (jobId == _activeMultiReceiveJobId) {
       _activeMultiReceiver?.cancel();
       _activeMultiReceiver = null;
       _activeMultiReceiveJobId = null;
     }
-    // Tell connected sender(s) that we cancelled.
     _broadcastControl({'type': 'transfer_cancelled_by_receiver'});
   }
 
@@ -414,9 +375,6 @@ class ConnectionManager extends ChangeNotifier {
       final deviceIp = request.connectionInfo?.remoteAddress.address;
       final mode = request.uri.queryParameters['mode'] ?? 'wifi';
 
-      // Reject duplicate connections for an already-active device.
-      // This happens when "Via Both" fires two parallel WebSocket connects
-      // from the scanning side — only the first should be accepted.
       if (_activeChannels.containsKey(requesterName)) {
         debugPrint(
           '[WebSocket] Duplicate connection from $requesterName — closing extra socket.',
@@ -438,8 +396,6 @@ class ConnectionManager extends ChangeNotifier {
     }
   }
 
-  // ============== CLIENT (INITIATOR) METHODS ==============
-
   /// Tracks device names currently being connected — prevents duplicate
   /// _setupChannel calls when "Via Both" fires two parallel connects.
   final Set<String> _pendingConnects = {};
@@ -456,9 +412,6 @@ class ConnectionManager extends ChangeNotifier {
   }) async {
     final name = targetDeviceName ?? 'Device ($ip)';
 
-    // Prevent a second parallel connect (e.g. Via Both with two IPs) from
-    // calling _setupChannel twice for the same device name, which would replace
-    // the first channel and then lose the device when the server closes the dupe.
     if (_activeChannels.containsKey(name) || _pendingConnects.contains(name)) {
       debugPrint(
         '[connectToDevice] $name already connected/pending — skipping $ip',
@@ -478,7 +431,6 @@ class ConnectionManager extends ChangeNotifier {
       ).timeout(const Duration(seconds: 7));
       final channel = IOWebSocketChannel(socket);
       _setupChannel(name, channel, ip: ip, mode: connectionMode);
-      // Store all known IPs for this device (enables multi-channel later)
       if (extraIps.isNotEmpty) {
         _deviceAllIps[name] = extraIps.toList();
       }
@@ -490,8 +442,6 @@ class ConnectionManager extends ChangeNotifier {
       _pendingConnects.remove(name);
     }
   }
-
-  // ============== COMMON WEBSOCKET LOGIC ==============
 
   /// Schedules [notifyListeners] on the next frame so it never fires while
   /// the widget tree is locked (e.g. during layout or a build pass).
@@ -530,8 +480,6 @@ class ConnectionManager extends ChangeNotifier {
     String? ip,
     String mode = 'wifi',
   }) {
-    // Close the previous channel for this device if there was one,
-    // but mark it as replaced so its onDone doesn't remove the new entry.
     if (_activeChannels.containsKey(deviceName)) {
       final old = _activeChannels[deviceName]!;
       _replacedChannels.add(old);
@@ -546,9 +494,6 @@ class ConnectionManager extends ChangeNotifier {
       'Vortex Devices Linked Successfully! ($deviceName, ip: $ip, mode: $mode)',
     );
 
-    // Defer UI callbacks to the next frame — they may call Navigator.pop /
-    // setState which crash if fired while the widget tree is locked.
-    // ensureVisualUpdate() guarantees a frame is scheduled even on idle screens.
     SchedulerBinding.instance
       ..ensureVisualUpdate()
       ..addPostFrameCallback((_) {
@@ -563,24 +508,20 @@ class ConnectionManager extends ChangeNotifier {
       },
       onDone: () {
         debugPrint('WebSocket connection closed with $deviceName');
-        // Only remove if this specific channel instance is still the active one
-        // (not if it was replaced by a newer connection for the same device).
-        if (_replacedChannels.remove(channel)) return; // was replaced — ignore
+        if (_replacedChannels.remove(channel)) return;
         _activeChannels.remove(deviceName);
         _deviceConnectionMode.remove(deviceName);
         _safeNotify();
       },
       onError: (error) {
         debugPrint('WebSocket error with $deviceName: $error');
-        if (_replacedChannels.remove(channel)) return; // was replaced — ignore
+        if (_replacedChannels.remove(channel)) return;
         _activeChannels.remove(deviceName);
         _deviceConnectionMode.remove(deviceName);
         _safeNotify();
       },
     );
   }
-
-  // ============== MULTI-CHANNEL TRANSFER NEGOTIATION ==============
 
   /// Callback fired when a multi-channel transfer completes on receive side.
   Function(String relativePath, String savedPath)? onMultiChannelFileReceived;
@@ -596,28 +537,23 @@ class ConnectionManager extends ChangeNotifier {
           _handleMultiChannelRequest(deviceName, msg);
           break;
         case 'mc_accept':
-          // Handled by the sender-side future (see TransferService).
           if (!_pendingMcAccept.isCompleted) {
             _pendingMcAccept.complete(msg);
           }
           break;
         case 'transfer_cancelled_by_sender':
-          // Receiver gets this — the sender has cancelled.
           onSenderCancelledTransfer?.call();
           break;
         case 'transfer_cancelled_by_receiver':
-          // Sender gets this — the receiver has cancelled.
           onReceiverCancelledTransfer?.call();
           break;
         default:
           break;
       }
     } catch (_) {
-      // Not JSON or not a known control message — ignore.
     }
   }
 
-  // Completer that the sender-side awaits for mc_accept.
   Completer<Map<String, dynamic>> _pendingMcAccept = Completer();
 
   /// Called by TransferService on the SENDER side: sends a mc_request to the
@@ -626,10 +562,8 @@ class ConnectionManager extends ChangeNotifier {
     required String deviceName,
     required List<Map<String, dynamic>> files,
   }) async {
-    // Refresh local endpoints before negotiation
     _localEndpoints = await enumerateInterfaces();
 
-    // Reset the completer
     _pendingMcAccept = Completer<Map<String, dynamic>>();
 
     final request = McProtocol.buildRequest(
@@ -641,7 +575,6 @@ class ConnectionManager extends ChangeNotifier {
 
     channel.sink.add(jsonEncode(request));
 
-    // Wait for the receiver to respond with mc_accept (timeout 15s).
     final response = await _pendingMcAccept.future.timeout(
       const Duration(seconds: 15),
     );
@@ -654,9 +587,6 @@ class ConnectionManager extends ChangeNotifier {
     Map<String, dynamic> msg,
   ) async {
     try {
-      // If a previous multi-channel receiver is still alive (stalled transfer,
-      // retry, or duplicate request), cancel it first so its server sockets do
-      // not compete for the same ports.
       if (_activeMultiReceiver != null) {
         debugPrint('[MultiRecv] Replacing previous active receiver');
         if (_activeMultiReceiveJobId != null) {
@@ -681,13 +611,9 @@ class ConnectionManager extends ChangeNotifier {
         if (f['isDir'] != true) totalBytes += (f['size'] as int?) ?? 0;
       }
 
-      // Unique receive job id per transfer attempt (important when retrying
-      // from the same device name, otherwise progress can map to stale jobs).
       final jobId = 'mc_${deviceName}_${DateTime.now().millisecondsSinceEpoch}';
       _activeMultiReceiveJobId = jobId;
 
-      // Determine how many channels to open — min of sender and receiver
-      // interface counts.
       _localEndpoints = await enumerateInterfaces();
       final channelCount = senderChannels.length < _localEndpoints.length
           ? senderChannels.length
@@ -695,8 +621,6 @@ class ConnectionManager extends ChangeNotifier {
 
       final saveDir = await TransferService.getReceiveDir();
 
-      // Build a human-friendly label before creating the receiver so the
-      // onComplete closure can capture it.
       final fileCount = files.length;
       final String receiveLabel;
       if (fileCount == 1) {
@@ -706,7 +630,6 @@ class ConnectionManager extends ChangeNotifier {
         receiveLabel = '$fileCount files from $deviceName';
       }
 
-      // Create the receiver
       _activeMultiReceiver = MultiChannelReceiver(
         channelCount: channelCount,
         saveBasePath: saveDir.path,
@@ -734,7 +657,6 @@ class ConnectionManager extends ChangeNotifier {
         },
       );
 
-      // Start receiving in the background (binds server sockets).
       _activeMultiReceiver!.start(totalBytes: totalBytes).catchError((e) {
         debugPrint('[MultiRecv] Fatal: $e');
         onFileReceiveError?.call(jobId, e.toString());
@@ -742,17 +664,10 @@ class ConnectionManager extends ChangeNotifier {
         _activeMultiReceiveJobId = null;
       });
 
-      // Wait until all server sockets are bound before telling the sender
-      // to connect.  Without this, the sender receives mc_accept and tries
-      // Socket.connect() before the ports are open → connection refused or
-      // data goes to a stale socket.
       await _activeMultiReceiver!.readyFuture.timeout(
         const Duration(seconds: 10),
       );
 
-      // Send back mc_accept with endpoints subnet-matched to sender channels.
-      // For each sender channel IP, find the local interface on the same /24
-      // so that traffic actually flows over the intended NIC (WiFi vs USB).
       final matchedEndpoints = <ChannelEndpoint>[];
       for (int ci = 0; ci < channelCount; ci++) {
         final senderIp = senderChannels[ci].ip;
@@ -766,7 +681,6 @@ class ConnectionManager extends ChangeNotifier {
       final channel = _activeChannels[deviceName];
       channel?.sink.add(jsonEncode(accept));
 
-      // Notify UI that a multi-channel receive is starting.
       onFileReceiveStart?.call(jobId, receiveLabel, totalBytes);
     } catch (e) {
       debugPrint('[MultiRecv] Failed to set up multi-channel: $e');
@@ -781,10 +695,7 @@ class ConnectionManager extends ChangeNotifier {
     return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2];
   }
 
-  // ============== FILE RECEIVE ==============
-
   Future<void> _handleUpload(HttpRequest request) async {
-    // If an upload was recently cancelled on phone, reject immediate retries or queue
     if (_lastHttpUploadCancelTime != null &&
         DateTime.now().difference(_lastHttpUploadCancelTime!).inMilliseconds < 4000) {
       debugPrint('[Upload] Rejecting post-cancel request');
@@ -811,12 +722,10 @@ class ConnectionManager extends ChangeNotifier {
       final encoded = request.headers.value('x-vortex-path') ?? 'received_file';
       relativePath = Uri.decodeComponent(encoded);
 
-      // Content-Length may be -1 when the sender does not provide it.
       final totalBytes = request.contentLength;
 
       final saveDir = await TransferService.getReceiveDir();
 
-      // Preserve subdirectory structure inside the Vortex folder
       final parts = relativePath.split('/');
       final fileName = parts.last;
       final Directory targetDir;
@@ -832,7 +741,6 @@ class ConnectionManager extends ChangeNotifier {
       file = File('${targetDir.path}/$fileName');
       sink = file.openWrite();
 
-      // Notify: transfer starting
       onFileReceiveStart?.call(jobId, relativePath, totalBytes);
 
       int received = 0;
@@ -855,7 +763,6 @@ class ConnectionManager extends ChangeNotifier {
         if (totalBytes > 0 && received >= totalBytes) {
           onFileReceiveProgress?.call(jobId, received);
         } else if (pendingNotify >= 65536) {
-          // 64KB threshold
           pendingNotify = 0;
           onFileReceiveProgress?.call(jobId, received);
         }
@@ -870,7 +777,6 @@ class ConnectionManager extends ChangeNotifier {
         return;
       }
 
-      // Check if upload was aborted/truncated before completion
       if (totalBytes > 0 && received < totalBytes) {
         await sink.flush();
         await sink.close();
@@ -891,7 +797,6 @@ class ConnectionManager extends ChangeNotifier {
         return;
       }
 
-      // Ensure the final progress is sent if we exited early or had no totalBytes
       if (pendingNotify > 0) {
         onFileReceiveProgress?.call(jobId, received);
       }
@@ -943,7 +848,7 @@ class ConnectionManager extends ChangeNotifier {
     _deviceAllIps.remove(deviceName);
     _deviceConnectionMode.remove(deviceName);
     if (channel != null) {
-      _replacedChannels.add(channel); // prevent onDone re-notifying
+      _replacedChannels.add(channel);
       await channel.sink.close();
     }
     _safeNotify();
@@ -951,7 +856,7 @@ class ConnectionManager extends ChangeNotifier {
 
   Future<void> disconnectAll() async {
     for (var channel in _activeChannels.values) {
-      _replacedChannels.add(channel); // prevent onDone from double-removing
+      _replacedChannels.add(channel);
       await channel.sink.close();
     }
     _activeChannels.clear();

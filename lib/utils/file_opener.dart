@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
+import '../views/photos_view.dart';
 import '../widgets/video_player_view.dart';
 import '../widgets/audio_player_sheet.dart';
 
@@ -25,12 +27,31 @@ class FileOpener {
     'wma',
     'opus',
   };
+  static const _imageExts = {
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'webp',
+    'bmp',
+    'heic',
+  };
 
   static Future<void> openFile(BuildContext context, String path) async {
     final ext = path.split('.').last.toLowerCase();
     final name = path.split('/').last;
 
-    if (_videoExts.contains(ext)) {
+    if (_imageExts.contains(ext)) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PhotoFullScreenView(
+            photos: [File(path)],
+            initialIndex: 0,
+          ),
+        ),
+      );
+    } else if (_videoExts.contains(ext)) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -40,7 +61,6 @@ class FileOpener {
     } else if (_audioExts.contains(ext)) {
       AudioPlayerSheet.show(context, path, name);
     } else {
-      // Use open_filex for EVERYTHING else (PDFs, Docs, APKs, etc.)
       try {
         final result = await OpenFilex.open(path);
         if (result.type != ResultType.done) {

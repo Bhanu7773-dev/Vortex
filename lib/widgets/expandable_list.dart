@@ -24,7 +24,6 @@ class _ExpandableSectionState extends State<ExpandableSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section Header
           GestureDetector(
             onTap: () => setState(() => _isExpanded = !_isExpanded),
             child: Padding(
@@ -66,7 +65,6 @@ class _ExpandableSectionState extends State<ExpandableSection> {
               .fadeIn(duration: 400.ms)
               .slideX(begin: -0.05, end: 0, duration: 300.ms),
 
-          // Section Items
           AnimatedCrossFade(
             firstChild: _buildSectionItems(),
             secondChild: const SizedBox.shrink(),
@@ -412,7 +410,7 @@ class _BottomSheetOptionState extends State<_BottomSheetOption> {
         duration: const Duration(milliseconds: 100),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: _isPressed 
+          color: _isPressed
               ? widget.iconColor.withOpacity(0.15)
               : widget.iconColor.withOpacity(0.08),
           borderRadius: BorderRadius.circular(16),

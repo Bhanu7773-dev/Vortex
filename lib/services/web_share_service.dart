@@ -150,7 +150,6 @@ class WebShareService extends ChangeNotifier {
 
     final path = request.uri.path;
 
-    // ── 1. Serve Web Portal HTML ─────────────────────────────────────────────
     if (path == '/' || path == '/share') {
       final html = _buildPortalHtml();
       request.response
@@ -164,7 +163,6 @@ class WebShareService extends ChangeNotifier {
       return true;
     }
 
-    // ── 2. Return JSON list of shared files ─────────────────────────────────
     if (path == '/api/shared-files') {
       final list = [
         for (int i = 0; i < _sharedFiles.length; i++) _sharedFiles[i].toJson(i),
@@ -177,7 +175,6 @@ class WebShareService extends ChangeNotifier {
       return true;
     }
 
-    // ── 2b. Return upload cancellation status (used by browser to halt instantly)
     if (path == '/api/upload-status') {
       request.response
         ..statusCode = HttpStatus.ok
@@ -190,7 +187,6 @@ class WebShareService extends ChangeNotifier {
       return true;
     }
 
-    // ── 3. File Download ─────────────────────────────────────────────────────
     if (path == '/download') {
       final idParam = request.uri.queryParameters['id'];
       final id = int.tryParse(idParam ?? '');
@@ -226,7 +222,6 @@ class WebShareService extends ChangeNotifier {
       return true;
     }
 
-    // ── 4. Favicon ───────────────────────────────────────────────────────────
     if (path == '/favicon.ico') {
       request.response
         ..statusCode = HttpStatus.noContent

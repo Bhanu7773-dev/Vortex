@@ -26,7 +26,6 @@ class WebShareView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Top Cream Card ───────────────────────────────────────────
                 Container(
                   decoration: const BoxDecoration(
                     color: creamCardBg,
@@ -40,7 +39,6 @@ class WebShareView extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                       child: Column(
                         children: [
-                          // ── Top Bar ─────────────────────────────────────────
                           Row(
                             children: [
                               IconButton(
@@ -62,7 +60,6 @@ class WebShareView extends StatelessWidget {
                                 ),
                               ),
                               const Spacer(),
-                              // Custom Switch Toggle with Dark Track and Lime Knob
                               _buildCustomSwitch(
                                 isEnabled: webShare.isEnabled,
                                 onChanged: (val) =>
@@ -72,7 +69,6 @@ class WebShareView extends StatelessWidget {
                           ),
                           const SizedBox(height: 16),
 
-                          // ── QR Code ─────────────────────────────────────────
                           Center(
                             child: AnimatedOpacity(
                               duration: const Duration(milliseconds: 250),
@@ -100,7 +96,6 @@ class WebShareView extends StatelessWidget {
                           ),
                           const SizedBox(height: 18),
 
-                          // ── Subtitle ────────────────────────────────────────
                           const Text(
                             'Open this address on any device',
                             style: TextStyle(
@@ -111,7 +106,6 @@ class WebShareView extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
 
-                          // ── Big Address Display ─────────────────────────────
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: RichText(
@@ -145,7 +139,6 @@ class WebShareView extends StatelessWidget {
                           ),
                           const SizedBox(height: 18),
 
-                          // ── Action Buttons (Copy link & New link) ────────────
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -186,13 +179,11 @@ class WebShareView extends StatelessWidget {
                   ),
                 ),
 
-                // ── Lower Dark Section ───────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Live status dot ────────────────────────────────────
                       Row(
                         children: [
                           Container(
@@ -222,7 +213,6 @@ class WebShareView extends StatelessWidget {
                       ),
                       const SizedBox(height: 20),
 
-                      // ── Staged files Header ────────────────────────────────
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -247,7 +237,6 @@ class WebShareView extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
 
-                      // ── Staged files list or empty state ───────────────────
                       if (webShare.sharedFiles.isEmpty)
                         const Text(
                           'Nothing staged. Pick files in Vortex or tap Add files and they become downloadable from the browser.',
@@ -325,7 +314,6 @@ class WebShareView extends StatelessWidget {
                         ),
                       ],
 
-                      // ── Files Received via Web (if any) ───────────────────
                       if (webShare.receivedFromWeb.isNotEmpty) ...[
                         const SizedBox(height: 20),
                         const Text(
@@ -394,7 +382,6 @@ class WebShareView extends StatelessWidget {
 
                       const SizedBox(height: 28),
 
-                      // ── 3 Steps (1 - 2 - 3) ───────────────────────────────
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -417,7 +404,6 @@ class WebShareView extends StatelessWidget {
 
                       const SizedBox(height: 32),
 
-                      // ── "+ Add files" button ──────────────────────────────
                       GestureDetector(
                         onTap: () async {
                           await Navigator.push(

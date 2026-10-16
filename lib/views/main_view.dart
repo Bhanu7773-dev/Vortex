@@ -22,7 +22,7 @@ class MainWrapperView extends StatefulWidget {
 }
 
 class _MainWrapperViewState extends State<MainWrapperView> {
-  int _currentIndex = 1; // Start on 'Files' tab as per original plan
+  int _currentIndex = 1;
   Timer? _frameTimer;
 
   final List<Widget> _pages = const [RecentView(), HomeView()];
@@ -39,14 +39,11 @@ class _MainWrapperViewState extends State<MainWrapperView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final connectionManager = context.read<ConnectionManager>();
 
-      // Start listening on the networking port continuously
       connectionManager.startServer();
 
-      // Connect Web Share handler
       final webShareService = context.read<WebShareService>();
       connectionManager.webShareHandler = webShareService.handleHttpRequest;
 
-      // ── Show snackbar on this device when any peer connects ──────────────
       connectionManager.onConnectionEstablished = () {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -107,7 +104,6 @@ class _MainWrapperViewState extends State<MainWrapperView> {
         });
       };
 
-      // ── Receive-progress wiring ──────────────────────────────────────────
       final transferService = context.read<TransferService>();
 
       connectionManager.onFileReceiveStart = (id, relativePath, totalBytes) {
@@ -138,9 +134,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
         transferService.completeReceive(id: id, savedPath: savedPath);
       };
 
-      // Cross-side cancel notifications
       connectionManager.onSenderCancelledTransfer = () {
-        // Mark all active (non-complete) receive jobs as cancelled by sender.
         for (final job in List.of(transferService.receiveJobs)) {
           if (!job.isComplete && !job.cancelled) {
             transferService.cancelReceiveBySender(job.id);
@@ -158,7 +152,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       connectionManager.onHttpUploadStarted = () {
         webShareService.resetUploadCancelled();
       };
-    }); // end addPostFrameCallback
+    });
   }
 
   @override
@@ -193,7 +187,6 @@ class _MainWrapperViewState extends State<MainWrapperView> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            // Received tab
             Expanded(
               child: Center(
                 child: InkWell(
@@ -258,10 +251,8 @@ class _MainWrapperViewState extends State<MainWrapperView> {
               ),
             ),
 
-            // Center vortex button
             _buildLinkButton(context),
 
-            // Files tab
             Expanded(
               child: Center(
                 child: InkWell(
@@ -405,7 +396,6 @@ class _MainWrapperViewState extends State<MainWrapperView> {
               ),
               const SizedBox(height: 22),
 
-              // ── Top Row: Via Wi-Fi & Via USB ──
               Row(
                 children: [
                   Expanded(
@@ -437,7 +427,6 @@ class _MainWrapperViewState extends State<MainWrapperView> {
               ),
               const SizedBox(height: 12),
 
-              // ── Hero Highlight Card: Via both ──
               _buildHeroOptionCard(
                 icon: Icons.swap_horiz_rounded,
                 title: 'Via both',
@@ -450,7 +439,6 @@ class _MainWrapperViewState extends State<MainWrapperView> {
               ),
               const SizedBox(height: 12),
 
-              // ── Full-Width Card: Web share portal ──
               _buildWideOptionCard(
                 icon: Icons.language_rounded,
                 title: 'Web share portal',

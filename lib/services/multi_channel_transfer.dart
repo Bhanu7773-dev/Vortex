@@ -20,8 +20,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
 /// Size of each file block (1 MB) — matches single-channel chunk size.
 /// Larger blocks reduce per-block overhead (header serialization, yield,
 /// progress checks) which is critical for multi-channel throughput.
@@ -41,17 +39,15 @@ class TransferIds {
   static const int writeError = 0x0013;
 }
 
-// ─── FileBlock ───────────────────────────────────────────────────────────────
-
 /// A single block of a file (or a directory marker) flowing through the
 /// transfer pipeline.
 class FileBlock implements Comparable<FileBlock> {
   final bool isFile;
   final int fileIndex;
   final String path;
-  final int lastModified; // milliseconds since epoch
-  final int totalSize; // total file size in bytes
-  final int blockIndex; // which 1 MB block within the file
+  final int lastModified;
+  final int totalSize;
+  final int blockIndex;
   final Uint8List? data;
 
   FileBlock({
@@ -100,11 +96,9 @@ class FileBlock implements Comparable<FileBlock> {
   }
 }
 
-// ─── Channel info exchanged during negotiation ──────────────────────────────
-
 /// Describes one network interface available for transfer.
 class ChannelEndpoint {
-  final String name; // e.g. "wlan0", "eth0", "usb0"
+  final String name;
   final String ip;
 
   ChannelEndpoint({required this.name, required this.ip});
@@ -115,8 +109,6 @@ class ChannelEndpoint {
       ChannelEndpoint(name: j['name'] as String, ip: j['ip'] as String);
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 /// Returns all usable (non-loopback, non-virtual) IPv4 interface addresses.
 Future<List<ChannelEndpoint>> enumerateInterfaces() async {
   final endpoints = <ChannelEndpoint>[];
@@ -126,7 +118,6 @@ Future<List<ChannelEndpoint>> enumerateInterfaces() async {
   );
   for (final iface in interfaces) {
     final name = iface.name.toLowerCase();
-    // Skip virtual / Docker / VPN interfaces
     if (name.startsWith('docker') ||
         name.startsWith('virbr') ||
         name.startsWith('veth') ||
@@ -141,15 +132,11 @@ Future<List<ChannelEndpoint>> enumerateInterfaces() async {
       endpoints.add(ChannelEndpoint(name: iface.name, ip: addr.address));
     }
   }
-  // Guarantee at least one — fallback to any IPv4
   if (endpoints.isEmpty) {
     endpoints.add(ChannelEndpoint(name: 'any', ip: '0.0.0.0'));
   }
   return endpoints;
 }
-
-// ─── Binary protocol helpers ─────────────────────────────────────────────────
-// All multi-byte integers are big-endian (network byte order).
 
 void _writeUint16(BytesBuilder bb, int v) {
   bb.addByte((v >> 8) & 0xFF);
@@ -179,8 +166,6 @@ void _writeUTF(BytesBuilder bb, String s) {
   _writeInt32(bb, bytes.length);
   bb.add(bytes);
 }
-
-// ─── Read helpers (from buffered stream) ─────────────────────────────────────
 
 class _BinaryReader {
   final ListQueue<Uint8List> _chunks = ListQueue<Uint8List>();
@@ -297,14 +282,12 @@ class _BinaryReader {
   }
 }
 
-// ─── Progress info ───────────────────────────────────────────────────────────
-
 /// Per-channel speed / traffic info.
 class ChannelStats {
   final String name;
   int bytesSent = 0;
   int bytesReceived = 0;
-  double sendSpeed = 0; // bytes/sec
+  double sendSpeed = 0;
   double receiveSpeed = 0;
   DateTime _lastSample = DateTime.now();
   int _lastSentSnapshot = 0;
@@ -324,15 +307,9 @@ class ChannelStats {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// MULTI-CHANNEL SENDER (Isolate-based)
-// ═════════════════════════════════════════════════════════════════════════════
-
 /// Callback for aggregate progress.
 typedef MultiSendProgressCallback =
     void Function(int sentBytes, int totalBytes, List<ChannelStats> channels);
-
-// ── Serialization helpers ────────────────────────────────────────────────────
 
 /// Builds the wire-format header for a file block (without the data bytes).
 Uint8List _buildBlockHeader(FileBlock block) {
@@ -354,8 +331,6 @@ Uint8List _buildEofSentinel() {
   _writeUint16(bb, TransferIds.eof);
   return bb.toBytes();
 }
-
-// ── Sender isolate ───────────────────────────────────────────────────────────
 
 /// Each sender isolate reads its OWN blocks from disk and sends them over TCP.
 /// No 1 MB data copies cross between isolates — only tiny metadata messages.
@@ -399,10 +374,7 @@ Future<void> _runSenderIsolate(
     int lastLogBytes = 0;
     int globalBlockIndex = 0;
 
-    // Adaptive block size: start at kBlockSize (1MB), scale up after warmup
-    // based on measured throughput. Bigger blocks = less per-block overhead
-    // at high speeds (USB 3.x phones doing 200+ MB/s).
-    int adaptiveBlock = kBlockSize; // starts at 1MB
+    int adaptiveBlock = kBlockSize;
 
     for (int fi = 0; fi < fileManifest.length && !pipeError; fi++) {
       final entry = fileManifest[fi];
@@ -413,7 +385,6 @@ Future<void> _runSenderIsolate(
       final lastModified = entry['lastModified'] as int;
 
       if (isDir) {
-        // Directory entries are round-robin assigned
         if (globalBlockIndex % channelCount == chIndex) {
           final header = _buildBlockHeader(
             FileBlock(
@@ -448,9 +419,6 @@ Future<void> _runSenderIsolate(
         continue;
       }
 
-      // Round-robin block assignment: read every channelCount-th block.
-      // This keeps receiver write positions 1MB apart (not ~967MB apart like
-      // stripe), which is far better for Android's write scheduler.
       final file = File(filePath);
       final raf = await file.open(mode: FileMode.read);
       try {
@@ -462,7 +430,6 @@ Future<void> _runSenderIsolate(
               : adaptiveBlock;
 
           if (globalBlockIndex % channelCount == chIndex) {
-            // Our block — read and send it
             final data = await raf.read(chunkSize);
             final header = _buildBlockHeader(
               FileBlock(
@@ -485,7 +452,6 @@ Future<void> _runSenderIsolate(
               mainPort.send(sentBytes);
             }
 
-            // After 32-block warmup, scale up block size based on speed.
             if (sentBlocks == 32) {
               final elapsedMs = DateTime.now()
                   .difference(lastLogAt)
@@ -494,16 +460,15 @@ Future<void> _runSenderIsolate(
                   ? (sentBytes / (elapsedMs / 1000.0) / (1024 * 1024))
                   : 0.0;
               if (mbps > 200) {
-                adaptiveBlock = 4 * 1024 * 1024; // 4MB for USB 3.x
+                adaptiveBlock = 4 * 1024 * 1024;
               } else if (mbps > 80) {
-                adaptiveBlock = 2 * 1024 * 1024; // 2MB for mid-range
+                adaptiveBlock = 2 * 1024 * 1024;
               }
               mainPort.send(
                 'log:[MultiSend ch$chIndex] warmup done: ${mbps.toStringAsFixed(0)}MB/s → blockSize=${adaptiveBlock ~/ 1024}KB',
               );
             }
 
-            // Log speed every second
             final now = DateTime.now();
             if (now.difference(lastLogAt).inMilliseconds >= 1000) {
               final elapsed = now.difference(lastLogAt).inMilliseconds / 1000.0;
@@ -517,7 +482,6 @@ Future<void> _runSenderIsolate(
               lastLogBytes = sentBytes;
             }
           } else {
-            // Not our block — skip ahead without reading the data
             await raf.setPosition(await raf.position() + chunkSize);
           }
 
@@ -530,12 +494,11 @@ Future<void> _runSenderIsolate(
       }
     }
 
-    // Send EOF
     socket.add(_buildEofSentinel());
     if (!pipeError) {
       await socket.flush();
     }
-    mainPort.send(sentBytes); // final progress
+    mainPort.send(sentBytes);
     mainPort.send('done');
   } catch (e) {
     mainPort.send('error:$e');
@@ -549,8 +512,6 @@ Future<void> _runSenderIsolate(
     }
   }
 }
-
-// ── MultiChannelSender ───────────────────────────────────────────────────────
 
 /// Sends files over multiple TCP sockets using Dart Isolates — one isolate
 /// per network interface — each doing its own file I/O for zero-copy transfer.
@@ -599,7 +560,6 @@ class MultiChannelSender {
       channelStats.add(ChannelStats('ch$i'));
     }
 
-    // Build a lightweight manifest (just paths and sizes — no file data)
     final manifest = <Map<String, dynamic>>[];
     for (final tf in files) {
       final stat = await tf.file.stat();
@@ -612,7 +572,6 @@ class MultiChannelSender {
       });
     }
 
-    // Spawn one isolate per channel — each reads its own file blocks
     final doneCompleters = <Completer<void>>[];
 
     for (int i = 0; i < channelCount; i++) {
@@ -654,7 +613,6 @@ class MultiChannelSender {
       });
     }
 
-    // Wait for all isolates to complete
     try {
       await Future.wait(
         doneCompleters.map((c) => c.future),
@@ -671,10 +629,6 @@ class MultiChannelSender {
     }
   }
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// MULTI-CHANNEL RECEIVER
-// ═════════════════════════════════════════════════════════════════════════════
 
 /// Callback for aggregate receive progress.
 typedef MultiRecvProgressCallback =
@@ -703,13 +657,12 @@ class MultiChannelReceiver {
   final Completer<void> _readyCompleter = Completer<void>();
   Future<void> get readyFuture => _readyCompleter.future;
 
-  // Per-channel block queues — receiver pushes, writer pulls.
   late final List<Queue<FileBlock>> _channelQueues;
   late final List<int> _channelQueuedBytes;
   final _blockPushed = StreamController<void>.broadcast();
   final List<bool> _channelDone = [];
   int _totalReceived = 0;
-  int _totalBytes = 0; // set by negotiation
+  int _totalBytes = 0;
   bool _hadChannelError = false;
 
   MultiChannelReceiver({
@@ -745,7 +698,6 @@ class MultiChannelReceiver {
     }
 
     try {
-      // Bind server sockets
       for (int i = 0; i < channelCount; i++) {
         final server = await ServerSocket.bind(
           InternetAddress.anyIPv4,
@@ -758,16 +710,13 @@ class MultiChannelReceiver {
         );
       }
 
-      // Signal that all server sockets are bound and ready.
       if (!_readyCompleter.isCompleted) _readyCompleter.complete();
 
-      // Accept one connection per channel
       final receiverFutures = <Future>[];
       for (int i = 0; i < channelCount; i++) {
         receiverFutures.add(_acceptAndReceive(i));
       }
 
-      // Start writer (merges all channel queues)
       final writerFuture = _writer();
 
       await Future.wait([...receiverFutures, writerFuture]);
@@ -801,8 +750,6 @@ class MultiChannelReceiver {
       int recvBlocks = 0;
       var lastLogAt = DateTime.now();
       while (!_cancelled) {
-        // Apply back-pressure BEFORE reading next frame header so we stop
-        // consuming socket data when this channel is already too far ahead.
         if (_channelQueuedBytes[chIndex] > 16 * 1024 * 1024) {
           reader.pause();
           while (_channelQueuedBytes[chIndex] > 8 * 1024 * 1024 &&
@@ -862,10 +809,6 @@ class MultiChannelReceiver {
               _channelQueuedBytes[chIndex] += dataLen;
               _blockPushed.add(null);
 
-              // Back-pressure: pause reading while the writer drains the
-              // queue.  Only check _channelQueuedBytes — checking
-              // reader.bufferedBytes here would deadlock because bufferedBytes
-              // can never decrease while we're not calling readExact().
               if (_channelQueuedBytes[chIndex] > 16 * 1024 * 1024) {
                 reader.pause();
                 while (_channelQueuedBytes[chIndex] > 8 * 1024 * 1024 &&
@@ -936,11 +879,11 @@ class MultiChannelReceiver {
   /// a slower channel.
   Future<void> _writer() async {
     final openRafs = <int, RandomAccessFile>{};
-    final openFilePaths = <int, String>{}; // absolute path for each open file
+    final openFilePaths = <int, String>{};
     final relativePaths = <int, String>{};
-    final expectedBytes = <int, int>{}; // totalSize per file (not block-count)
-    final writtenBytes = <int, int>{}; // bytes written per file
-    final rafPositions = <int, int>{}; // cached write position per file
+    final expectedBytes = <int, int>{};
+    final writtenBytes = <int, int>{};
+    final rafPositions = <int, int>{};
     int rr = 0;
     int wroteBlocks = 0;
     var lastLogAt = DateTime.now();
@@ -995,15 +938,12 @@ class MultiChannelReceiver {
           openRafs[fileIndex] = await file.open(mode: FileMode.write);
           openFilePaths[fileIndex] = filePath;
           relativePaths[fileIndex] = block.path;
-          expectedBytes[fileIndex] = block.totalSize; // track by bytes
+          expectedBytes[fileIndex] = block.totalSize;
           writtenBytes[fileIndex] = 0;
           rafPositions[fileIndex] = 0;
         }
 
         final raf = openRafs[fileIndex]!;
-        // Only seek if the write head is not already at the right position.
-        // With stripe-based sender, blocks arrive sequentially so this
-        // skip eliminates the setPosition syscall on every block.
         final expectedPos = block.startPosition;
         if ((rafPositions[fileIndex] ?? 0) != expectedPos) {
           await raf.setPosition(expectedPos);
@@ -1018,8 +958,6 @@ class MultiChannelReceiver {
         writtenBytes[fileIndex] =
             (writtenBytes[fileIndex] ?? 0) + (block.data?.length ?? 0);
 
-        // File complete when all bytes have been written.
-        // Uses totalSize directly — works for any block size.
         final expBytes = expectedBytes[fileIndex] ?? 0;
         final wBytes = writtenBytes[fileIndex] ?? 0;
         if (expBytes == 0 || wBytes >= expBytes) {
@@ -1039,9 +977,6 @@ class MultiChannelReceiver {
           _blockPushed.add(null);
         }
 
-        // Yield to the event loop after every block so both receiver channels
-        // can process incoming TCP data. Without this yield the writer
-        // monopolizes the thread and starves the channel readers.
         await Future<void>.delayed(Duration.zero);
 
         final now = DateTime.now();
@@ -1062,7 +997,6 @@ class MultiChannelReceiver {
       }
 
       if (_cancelled) {
-        // Transfer was cancelled — close and delete all partially-written files.
         for (final entry in openRafs.entries) {
           try { await entry.value.close(); } catch (_) {}
           final path = openFilePaths[entry.key];
@@ -1101,17 +1035,11 @@ class MultiChannelReceiver {
   }
 }
 
-// ─── Transfer file helper (shared with TransferService) ──────────────────────
-
 class McTransferFile {
   final File file;
   final String relativePath;
   McTransferFile({required this.file, required this.relativePath});
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// NEGOTIATION PROTOCOL — runs over the existing WebSocket control channel
-// ═════════════════════════════════════════════════════════════════════════════
 
 /// JSON messages exchanged on the control channel before a multi-channel
 /// transfer begins.

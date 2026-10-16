@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,9 +8,9 @@ import 'package:video_thumbnail/video_thumbnail.dart';
 import '../viewmodels/media_viewmodels.dart';
 import '../utils/file_opener.dart';
 import '../widgets/share_sheet.dart';
+import '../widgets/video_player_view.dart';
 import '../theme/app_theme.dart';
 
-// ─── Shared thumbnail widget for a video file ──
 class _VideoThumb extends StatefulWidget {
   final File file;
   final double size;
@@ -99,7 +100,6 @@ class _VideoThumbState extends State<_VideoThumb> {
   }
 }
 
-// ─── Album Grid ──────────────────────────────
 class VideosView extends StatelessWidget {
   const VideosView({Key? key}) : super(key: key);
 
@@ -197,7 +197,6 @@ class VideosView extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Large Hero Banner Card
                                   Container(
                                     height: 200,
                                     width: double.infinity,
@@ -212,7 +211,6 @@ class VideosView extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 14),
-                                  // Title + Bold Lime Count Row
                                   Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
@@ -326,235 +324,206 @@ class VideosView extends StatelessWidget {
   }
 }
 
-// ─── Album Detail: 5-col grid ────────────────
 class VideoAlbumDetailView extends StatelessWidget {
   final VideoAlbum album;
   const VideoAlbumDetailView({Key? key, required this.album}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
+    return ChangeNotifierProvider<VideoAlbumDetailViewModel>(
       create: (_) => VideoAlbumDetailViewModel(album.folderPath),
       child: Consumer<VideoAlbumDetailViewModel>(
-        builder: (context, vm, _) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: vm.isSelectionMode
-              ? _selBar(
-                  context,
-                  vm,
-                  '${vm.selectedPaths.length} selected',
-                  vm.cancelSelection,
-                  vm.selectAll,
-                )
-              : AppBar(
-                  backgroundColor: Colors.black,
-                  elevation: 0,
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  title: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        album.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '${vm.videos.length} items',
-                        style: const TextStyle(
+        builder: (context, vm, _) {
+          return Scaffold(
+            backgroundColor: Colors.black,
+            extendBodyBehindAppBar: vm.isSelectionMode,
+            appBar: _buildAppBar(context, vm),
+            body: vm.isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.accentLime,
+                    ),
+                  )
+                : vm.videos.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.videocam_off_outlined,
+                          size: 80,
                           color: Colors.white54,
-                          fontSize: 12,
                         ),
+                        SizedBox(height: 16),
+                        Text(
+                          'No videos here',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Stack(
+                    children: [
+                      GridView.builder(
+                        padding: EdgeInsets.fromLTRB(
+                          12,
+                          vm.isSelectionMode
+                              ? kToolbarHeight +
+                                    MediaQuery.of(context).padding.top +
+                                    8
+                              : 12,
+                          12,
+                          vm.isSelectionMode ? 110 : 20,
+                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 4,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                            ),
+                        itemCount: vm.videos.length,
+                        itemBuilder: (context, index) {
+                          final file = vm.videos[index];
+                          final isSelected = vm.selectedPaths.contains(
+                            file.path,
+                          );
+
+                          return GestureDetector(
+                            onTap: () {
+                              if (vm.isSelectionMode) {
+                                vm.toggleSelection(file.path);
+                              } else {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => VideoPlayerView(
+                                      videoPath: file.path,
+                                      title: file.path.split(Platform.pathSeparator).last,
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            onLongPress: () {
+                              if (!vm.isSelectionMode) {
+                                HapticFeedback.mediumImpact();
+                                vm.enterSelectionWith(file.path);
+                              } else {
+                                vm.toggleSelection(file.path);
+                              }
+                            },
+                            child: _VideoTile(
+                              file: file,
+                              isSelected: isSelected,
+                              inSelectionMode: vm.isSelectionMode,
+                            ),
+                          );
+                        },
                       ),
+                      if (vm.isSelectionMode)
+                        Positioned(
+                          left: 20,
+                          right: 20,
+                          bottom: MediaQuery.of(context).padding.bottom + 16,
+                          child: _PremiumSelectionBar(vm: vm, context: context),
+                        ),
                     ],
                   ),
-                  actions: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.check_circle_outline,
-                        color: Colors.white,
-                      ),
-                      onPressed: vm.toggleSelectionMode,
-                    ),
-                  ],
-                ),
-          body: vm.isLoading
-              ? Center(
-                  child: CircularProgressIndicator(color: Colors.blue.shade400),
-                )
-              : vm.videos.isEmpty
-              ? _emptyState(Icons.videocam_off_outlined, 'No videos here')
-              : Stack(
-                  children: [
-                    GridView.builder(
-                      padding: EdgeInsets.only(
-                        top: vm.isSelectionMode
-                            ? kToolbarHeight +
-                                  MediaQuery.of(context).padding.top
-                            : 0,
-                        bottom: vm.isSelectionMode ? 100 : 0,
-                      ),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 5,
-                            crossAxisSpacing: 2,
-                            mainAxisSpacing: 2,
-                          ),
-                      itemCount: vm.videos.length,
-                      itemBuilder: (context, i) {
-                        final file = vm.videos[i];
-                        final sel = vm.selectedPaths.contains(file.path);
-                        return GestureDetector(
-                          onTap: () {
-                            if (vm.isSelectionMode) {
-                              vm.toggleSelection(file.path);
-                            } else {
-                              FileOpener.openFile(context, file.path);
-                            }
-                          },
-                          onLongPress: () {
-                            HapticFeedback.mediumImpact();
-                            if (!vm.isSelectionMode)
-                              vm.enterSelectionWith(file.path);
-                            else
-                              vm.toggleSelection(file.path);
-                          },
-                          child: _GridTile(
-                            isSelected: sel,
-                            inSelectionMode: vm.isSelectionMode,
-                            child: _VideoThumb(file: file, size: 180),
-                          ),
-                        );
-                      },
-                    ),
-                    if (vm.isSelectionMode)
-                      Positioned(
-                        left: 16,
-                        right: 16,
-                        bottom: MediaQuery.of(context).padding.bottom + 12,
-                        child: _ActionBar(
-                          onShare: () {
-                            showVortexShareSheet(
-                              context,
-                              vm.selectedPaths.toList(),
-                              onSendStarted: vm.cancelSelection,
-                            );
-                          },
-                          onDelete: vm.selectedPaths.isEmpty
-                              ? null
-                              : () => _deleteDialog(
-                                  context,
-                                  vm.selectedPaths.length,
-                                  vm.deleteSelected,
-                                ),
-                        ),
-                      ),
-                  ],
-                ),
-        ),
+          );
+        },
       ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(
+    BuildContext context,
+    VideoAlbumDetailViewModel vm,
+  ) {
+    if (vm.isSelectionMode) {
+      return AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            child: Container(color: Colors.black.withOpacity(0.75)),
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+          onPressed: vm.cancelSelection,
+        ),
+        title: Text(
+          vm.selectedPaths.isEmpty
+              ? 'Select items'
+              : '${vm.selectedPaths.length} selected',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+            letterSpacing: -0.3,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: vm.selectAll,
+            child: const Text(
+              'Select all',
+              style: TextStyle(
+                color: AppTheme.accentLime,
+                fontWeight: FontWeight.w700,
+                fontSize: 14.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      );
+    }
+
+    return AppBar(
+      backgroundColor: Colors.black,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            album.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Text(
+            '${album.count} items',
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ],
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.check_circle_outline, color: Colors.white),
+          onPressed: vm.toggleSelectionMode,
+          tooltip: 'Select',
+        ),
+      ],
     );
   }
 }
 
-// ─────────────────────────────────────────────
-// Shared helpers (also exported for reuse)
-// ─────────────────────────────────────────────
-
-Widget _emptyState(IconData icon, String label) => Center(
-  child: Column(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      Icon(icon, size: 80, color: Colors.white54),
-      const SizedBox(height: 16),
-      Text(
-        label,
-        style: const TextStyle(color: Colors.white54, fontSize: 16),
-      ),
-    ],
-  ),
-);
-
-AppBar _selBar(
-  BuildContext context,
-  dynamic vm,
-  String title,
-  VoidCallback onClose,
-  VoidCallback onAll,
-) => AppBar(
-  backgroundColor: Colors.white.withOpacity(0.05),
-  leading: IconButton(
-    icon: const Icon(Icons.close, color: Colors.white),
-    onPressed: onClose,
-  ),
-  title: Text(
-    title,
-    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-  ),
-  actions: [
-    TextButton(
-      onPressed: onAll,
-      child: Text(
-        'Select all',
-        style: TextStyle(
-          color: Colors.blue.shade400,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ),
-  ],
-);
-
-void _deleteDialog(BuildContext context, int count, VoidCallback onConfirm) {
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1C1C1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text(
-        'Delete?',
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-      ),
-      content: Text(
-        'Permanently delete $count item(s)?',
-        style: const TextStyle(color: Colors.white54, fontSize: 14),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: Text(
-            'Cancel',
-            style: TextStyle(color: Colors.white54),
-          ),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.pop(ctx);
-            onConfirm();
-          },
-          child: Text(
-            'Delete',
-            style: TextStyle(
-              color: Colors.redAccent,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _GridTile extends StatelessWidget {
-  final Widget child;
+class _VideoTile extends StatelessWidget {
+  final File file;
   final bool isSelected;
   final bool inSelectionMode;
-  const _GridTile({
-    required this.child,
+  const _VideoTile({
+    required this.file,
     required this.isSelected,
     required this.inSelectionMode,
   });
@@ -562,117 +531,197 @@ class _GridTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      foregroundDecoration: isSelected
-          ? BoxDecoration(
-              color: Colors.black38,
-              border: Border.all(color: Colors.blue.shade400, width: 2.5),
-            )
-          : null,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          child,
-          if (inSelectionMode)
-            Positioned(
-              top: 4,
-              right: 4,
-              child: AnimatedScale(
-                scale: 1.0,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.elasticOut,
-                child: Container(
-                  width: 20,
-                  height: 20,
+      duration: const Duration(milliseconds: 150),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? AppTheme.accentLime : Colors.transparent,
+          width: 2.5,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(13.5),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _VideoThumb(
+              file: file,
+              size: 260,
+            ),
+            if (inSelectionMode)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 22,
+                  height: 22,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected ? Colors.blue.shade400 : Colors.black54,
-                    border: Border.all(color: Colors.white, width: 2),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: Colors.blue.shade400.withOpacity(0.5),
-                              blurRadius: 6,
-                            ),
-                          ]
-                        : [],
+                    color: isSelected
+                        ? AppTheme.accentLime
+                        : Colors.black.withOpacity(0.35),
+                    border: isSelected
+                        ? null
+                        : Border.all(color: Colors.white70, width: 1.5),
                   ),
+                  alignment: Alignment.center,
                   child: isSelected
                       ? const Icon(
                           Icons.check_rounded,
-                          color: Colors.white,
-                          size: 12,
+                          color: Colors.black,
+                          size: 14,
+                          weight: 700,
                         )
                       : null,
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ActionBar extends StatelessWidget {
-  final VoidCallback onShare;
-  final VoidCallback? onDelete;
-  const _ActionBar({required this.onShare, required this.onDelete});
+class _PremiumSelectionBar extends StatelessWidget {
+  final VideoAlbumDetailViewModel vm;
+  final BuildContext context;
+  const _PremiumSelectionBar({required this.vm, required this.context});
 
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 64,
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(0.05),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: Colors.white10),
-    ),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _ActionBtn(icon: Icons.share_rounded, label: 'Share', onTap: onShare),
-        Container(width: 1, height: 36, color: Colors.white12),
-        _ActionBtn(
-          icon: Icons.delete_outline_rounded,
-          label: 'Delete',
-          color: Colors.redAccent,
-          enabled: onDelete != null,
-          onTap: onDelete ?? () {},
-        ),
-      ],
-    ),
-  );
-}
-
-class _ActionBtn extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color color;
-  final bool enabled;
-  const _ActionBtn({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.color = Colors.white,
-    this.enabled = true,
-  });
   @override
   Widget build(BuildContext context) {
-    final c = enabled ? color : color.withOpacity(0.35);
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    final hasSelection = vm.selectedPaths.isNotEmpty;
+
+    return Container(
+      height: 66,
+      decoration: BoxDecoration(
+        color: const Color(0xFF141715),
+        borderRadius: BorderRadius.circular(36),
+        border: Border.all(color: const Color(0xFF262A28), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.65),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
-          Icon(icon, color: c, size: 24),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: c,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
+          Expanded(
+            child: InkWell(
+              onTap: hasSelection
+                  ? () {
+                      showVortexShareSheet(
+                        context,
+                        vm.selectedPaths.toList(),
+                        onSendStarted: vm.cancelSelection,
+                      );
+                    }
+                  : null,
+              borderRadius: const BorderRadius.horizontal(
+                left: Radius.circular(36),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.share_outlined,
+                    color: hasSelection
+                        ? AppTheme.accentLime
+                        : const Color(0xFF454B47),
+                    size: 21,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Share',
+                    style: TextStyle(
+                      color: hasSelection
+                          ? AppTheme.accentLime
+                          : const Color(0xFF454B47),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ),
+          Container(width: 1, height: 32, color: const Color(0xFF262A28)),
+          Expanded(
+            child: InkWell(
+              onTap: hasSelection ? () => _confirmDelete(context, vm) : null,
+              borderRadius: const BorderRadius.horizontal(
+                right: Radius.circular(36),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.delete_outline_rounded,
+                    color: hasSelection
+                        ? const Color(0xFFFF5252)
+                        : const Color(0xFF454B47),
+                    size: 21,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: hasSelection
+                          ? const Color(0xFFFF5252)
+                          : const Color(0xFF454B47),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext ctx, VideoAlbumDetailViewModel vm) {
+    showDialog(
+      context: ctx,
+      builder: (dialog) => AlertDialog(
+        backgroundColor: const Color(0xFF141715),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFF262A28), width: 1),
+        ),
+        title: const Text(
+          'Delete Selected Videos?',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        content: Text(
+          'Permanently delete ${vm.selectedPaths.length} video(s)? This cannot be undone.',
+          style: const TextStyle(color: Color(0xFF78828A), fontSize: 14),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF5252),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            ),
+            onPressed: () {
+              Navigator.pop(dialog);
+              vm.deleteSelected();
+            },
+            child: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),

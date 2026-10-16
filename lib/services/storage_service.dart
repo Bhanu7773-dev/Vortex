@@ -35,8 +35,6 @@ class StorageService {
         final dirs = await getExternalStorageDirectories();
         if (dirs != null) {
           for (var dir in dirs) {
-            // SD card paths usually look like /storage/XXXX-XXXX/Android/data/com.example.app/files
-            // We want the root: /storage/XXXX-XXXX
             final pathParts = dir.path.split('/');
             if (pathParts.length > 2 && pathParts[1] == 'storage') {
               final volumeId = pathParts[2];
@@ -97,12 +95,9 @@ class StorageService {
   Future<bool> requestStoragePermission() async {
     if (!Platform.isAndroid && !Platform.isIOS) return true;
 
-    // On Android 11+, we really want MANAGE_EXTERNAL_STORAGE for a file manager.
     if (Platform.isAndroid) {
-      // 1. Try granular/legacy first just to get basic access
       bool isAndroid13OrHigher = false;
       try {
-        // Simple check for SDK 33
         isAndroid13OrHigher =
             await Permission.photos.status != PermissionStatus.restricted;
       } catch (_) {}
@@ -117,18 +112,14 @@ class StorageService {
         await Permission.storage.request();
       }
 
-      // 2. Check if we ALREADY have MANAGE_EXTERNAL_STORAGE
       if (await Permission.manageExternalStorage.isGranted) {
         return true;
       }
 
-      // 3. Request MANAGE_EXTERNAL_STORAGE if not granted
-      // This will take user to Settings.
       final status = await Permission.manageExternalStorage.request();
       return status.isGranted;
     }
 
-    // Fallback for non-Android (though this app is focused on Android)
     return await Permission.storage.request().isGranted;
   }
 
@@ -170,7 +161,6 @@ class StorageService {
         return _getAdvertisedStorage(mb / 1024.0);
       }
     } catch (e) {
-      // Handle missing method channel safely
     }
     return 64.0;
   }
@@ -188,7 +178,6 @@ class StorageService {
             final totalGB = totalKb / 1024.0 / 1024.0;
             final usedGB = usedKb / 1024.0 / 1024.0;
             final advertisedTotal = _getAdvertisedStorage(totalGB);
-            // maintain same ratio
             return advertisedTotal * (usedGB / totalGB);
           }
         }
@@ -207,7 +196,6 @@ class StorageService {
         return advertisedTotal - freeGB;
       }
     } catch (e) {
-      // Handle missing method channel safely
     }
     return 56.5;
   }

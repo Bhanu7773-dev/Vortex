@@ -5,7 +5,6 @@ class PersistenceService {
   static const _keyQuickAccess = 'quick_access_paths';
   static const _keyTags = 'tag_mappings';
 
-  // Quick Access: List of absolute paths
   Future<void> saveQuickAccessPaths(List<String> paths) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_keyQuickAccess, paths);
@@ -16,7 +15,6 @@ class PersistenceService {
     return prefs.getStringList(_keyQuickAccess) ?? [];
   }
 
-  // Tags: Map<TagName, List<Paths>>
   Future<void> saveTagMappings(Map<String, List<String>> mappings) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyTags, jsonEncode(mappings));
@@ -36,7 +34,6 @@ class PersistenceService {
     }
   }
 
-  // Helper to add a path to a tag
   Future<void> addPathToTag(String tagName, String path) async {
     final mappings = await loadTagMappings();
     final paths = mappings[tagName] ?? [];

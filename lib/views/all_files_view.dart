@@ -28,6 +28,11 @@ class _AllFilesViewState extends State<AllFilesView> {
   bool _searching = false;
   Timer? _debounce;
 
+  final GlobalKey _addBtnKey = GlobalKey();
+  final GlobalKey _moreBtnKey = GlobalKey();
+  bool _isAddMenuOpen = false;
+  bool _isMoreMenuOpen = false;
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -57,7 +62,6 @@ class _AllFilesViewState extends State<AllFilesView> {
               floatingActionButton: viewModel.isFolderPickerMode
                   ? FloatingActionButton.extended(
                       onPressed: () {
-                        // Return list of selected paths, or current path if none selected
                         if (viewModel.selectedPaths.isEmpty) {
                           Navigator.pop(context, [viewModel.currentPath]);
                         } else {
@@ -159,7 +163,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                                 viewModel.deepSearch(q);
                               },
                             );
-                            setState(() {}); // rebuild X button instantly
+                            setState(() {});
                           },
                         ),
                         actions: [
@@ -266,47 +270,29 @@ class _AllFilesViewState extends State<AllFilesView> {
                                     );
                                   }).toList(),
                             ),
-                          PopupMenuButton<String>(
-                            icon: const Icon(
-                              Icons.add,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                            color: const Color(0xFF16191E),
-                            position: PopupMenuPosition.under,
-                            popUpAnimationStyle: AnimationStyle(
-                              curve: Curves.easeOut,
-                              duration: const Duration(milliseconds: 180),
-                            ),
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'new_folder',
-                                child: Text(
-                                  'New folder',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: GestureDetector(
+                              key: _addBtnKey,
+                              onTap: () => _openAddMenu(context, viewModel),
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: _isAddMenuOpen
+                                      ? const Color(0xFF1E2320)
+                                      : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.add,
+                                  color: _isAddMenuOpen
+                                      ? AppTheme.accentLime
+                                      : Colors.white,
+                                  size: 24,
                                 ),
                               ),
-                              const PopupMenuItem(
-                                value: 'add_files',
-                                child: Text(
-                                  'Add files',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            onSelected: (value) {
-                              if (value == 'new_folder') {
-                                _showCreateDialog(context, viewModel, true);
-                              } else if (value == 'add_files') {
-                                _showCreateDialog(context, viewModel, false);
-                              }
-                            },
+                            ),
                           ),
                           IconButton(
                             icon: const Icon(
@@ -316,49 +302,29 @@ class _AllFilesViewState extends State<AllFilesView> {
                             ),
                             onPressed: () => setState(() => _searching = true),
                           ),
-                          PopupMenuButton<String>(
-                            icon: const Icon(
-                              Icons.more_vert,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                            color: const Color(0xFF16191E),
-                            position: PopupMenuPosition.under,
-                            popUpAnimationStyle: AnimationStyle(
-                              curve: Curves.easeOut,
-                              duration: const Duration(milliseconds: 180),
-                            ),
-                            itemBuilder: (context) => [
-                              PopupMenuItem(
-                                value: 'grid_view',
-                                child: Text(
-                                  viewModel.isGridView
-                                      ? 'List view'
-                                      : 'Grid view',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 2, right: 6),
+                            child: GestureDetector(
+                              key: _moreBtnKey,
+                              onTap: () => _openMoreMenu(context, viewModel),
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: _isMoreMenuOpen
+                                      ? const Color(0xFF1E2320)
+                                      : Colors.transparent,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.more_vert,
+                                  color: _isMoreMenuOpen
+                                      ? AppTheme.accentLime
+                                      : Colors.white,
+                                  size: 22,
                                 ),
                               ),
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Text(
-                                  'Edit',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            onSelected: (value) {
-                              if (value == 'grid_view') {
-                                viewModel.toggleGridView();
-                              } else if (value == 'edit') {
-                                viewModel.toggleSelectionMode();
-                              }
-                            },
+                            ),
                           ),
                         ],
                       ),
@@ -370,7 +336,6 @@ class _AllFilesViewState extends State<AllFilesView> {
                   : null,
               body: Builder(
                 builder: (context) {
-                  // ── Search mode ──
                   if (viewModel.isSearchMode) {
                     final results = viewModel.searchResults;
                     return Column(
@@ -445,7 +410,6 @@ class _AllFilesViewState extends State<AllFilesView> {
                     );
                   }
 
-                  // ── Normal browse mode ──
                   if (viewModel.isLoading) {
                     return const Center(
                       child: CircularProgressIndicator(
@@ -482,8 +446,14 @@ class _AllFilesViewState extends State<AllFilesView> {
                       _buildHeader(viewModel),
                       viewModel.isGridView
                           ? SliverPadding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16.0,
+                              padding: EdgeInsets.fromLTRB(
+                                16.0,
+                                0,
+                                16.0,
+                                viewModel.isSelectionMode ||
+                                        viewModel.isPasteMode
+                                    ? 96.0
+                                    : 24.0,
                               ),
                               sliver: SliverGrid(
                                 gridDelegate:
@@ -519,32 +489,40 @@ class _AllFilesViewState extends State<AllFilesView> {
                                 }, childCount: viewModel.items.length),
                               ),
                             )
-                          : SliverList(
-                              delegate: SliverChildBuilderDelegate((
-                                context,
-                                index,
-                              ) {
-                                return _FileListItem(
-                                      key: ValueKey(
-                                        viewModel.items[index].path,
-                                      ),
-                                      item: viewModel.items[index],
-                                      viewModel: viewModel,
-                                    )
-                                    .animate(
-                                      key: ValueKey(
-                                        '${viewModel.items[index].path}_anim',
-                                      ),
-                                    )
-                                    .fade(duration: 300.ms)
-                                    .slideX(
-                                      begin: 0.1,
-                                      end: 0,
-                                      curve: Curves.easeOut,
-                                      delay: (10 * index)
-                                          .ms, // quick staggered load
-                                    );
-                              }, childCount: viewModel.items.length),
+                          : SliverPadding(
+                              padding: EdgeInsets.only(
+                                bottom: viewModel.isSelectionMode ||
+                                        viewModel.isPasteMode
+                                    ? 96.0
+                                    : 24.0,
+                              ),
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate((
+                                  context,
+                                  index,
+                                ) {
+                                  return _FileListItem(
+                                        key: ValueKey(
+                                          viewModel.items[index].path,
+                                        ),
+                                        item: viewModel.items[index],
+                                        viewModel: viewModel,
+                                      )
+                                      .animate(
+                                        key: ValueKey(
+                                          '${viewModel.items[index].path}_anim',
+                                        ),
+                                      )
+                                      .fade(duration: 300.ms)
+                                      .slideX(
+                                        begin: 0.1,
+                                        end: 0,
+                                        curve: Curves.easeOut,
+                                        delay: (10 * index)
+                                            .ms,
+                                      );
+                                }, childCount: viewModel.items.length),
+                              ),
                             ),
                     ],
                   );
@@ -680,61 +658,473 @@ class _AllFilesViewState extends State<AllFilesView> {
     }
   }
 
+  void _openAddMenu(BuildContext context, AllFilesViewModel viewModel) {
+    setState(() => _isAddMenuOpen = true);
+    final renderBox =
+        _addBtnKey.currentContext?.findRenderObject() as RenderBox?;
+    final offset =
+        renderBox?.localToGlobal(Offset.zero) ?? const Offset(200, 80);
+    final size = renderBox?.size ?? const Size(38, 38);
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'AddMenu',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (ctx, anim1, anim2) {
+        return Stack(
+          children: [
+            Positioned(
+              top: offset.dy + size.height + 6,
+              right: MediaQuery.of(context).size.width - offset.dx - size.width,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 180,
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161917),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF262A28),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.65),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildAddMenuItem(
+                        icon: Icons.create_new_folder_outlined,
+                        label: 'New folder',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showCreateDialog(context, viewModel, true);
+                        },
+                      ),
+                      _buildAddMenuItem(
+                        icon: Icons.note_add_outlined,
+                        label: 'Add files',
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showCreateDialog(context, viewModel, false);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        return FadeTransition(
+          opacity: anim1,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(
+              CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic),
+            ),
+            alignment: Alignment.topRight,
+            child: child,
+          ),
+        );
+      },
+    ).then((_) {
+      if (mounted) setState(() => _isAddMenuOpen = false);
+    });
+  }
+
+  Widget _buildAddMenuItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: AppTheme.accentLime, size: 22),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openMoreMenu(BuildContext context, AllFilesViewModel viewModel) {
+    setState(() => _isMoreMenuOpen = true);
+    final renderBox =
+        _moreBtnKey.currentContext?.findRenderObject() as RenderBox?;
+    final offset =
+        renderBox?.localToGlobal(Offset.zero) ?? const Offset(250, 80);
+    final size = renderBox?.size ?? const Size(38, 38);
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'MoreMenu',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (ctx, anim1, anim2) {
+        return Stack(
+          children: [
+            Positioned(
+              top: offset.dy + size.height + 6,
+              right: 14,
+              child: Material(
+                color: Colors.transparent,
+                child: StatefulBuilder(
+                  builder: (context, setMenuState) {
+                    final isGrid = viewModel.isGridView;
+                    return Container(
+                      width: 205,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF161917),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: const Color(0xFF262A28),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.65),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(left: 4, bottom: 10),
+                            child: Text(
+                              'VIEW',
+                              style: TextStyle(
+                                color: Color(0xFF78828A),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F1210),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: const Color(0xFF222624),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      if (isGrid) {
+                                        viewModel.toggleGridView();
+                                        setMenuState(() {});
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: !isGrid
+                                            ? AppTheme.accentLime
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.menu_rounded,
+                                            size: 18,
+                                            color: !isGrid
+                                                ? Colors.black
+                                                : const Color(0xFF78828A),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'List',
+                                            style: TextStyle(
+                                              color: !isGrid
+                                                  ? Colors.black
+                                                  : const Color(0xFF78828A),
+                                              fontSize: 13,
+                                              fontWeight: !isGrid
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      if (!isGrid) {
+                                        viewModel.toggleGridView();
+                                        setMenuState(() {});
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isGrid
+                                            ? AppTheme.accentLime
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.grid_view_rounded,
+                                            size: 18,
+                                            color: isGrid
+                                                ? Colors.black
+                                                : const Color(0xFF78828A),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Grid',
+                                            style: TextStyle(
+                                              color: isGrid
+                                                  ? Colors.black
+                                                  : const Color(0xFF78828A),
+                                              fontSize: 13,
+                                              fontWeight: isGrid
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 10),
+                            child: Divider(
+                              color: Color(0xFF262A28),
+                              height: 1,
+                              thickness: 1,
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              viewModel.toggleSelectionMode();
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: const [
+                                  Icon(
+                                    Icons.edit_outlined,
+                                    color: AppTheme.accentLime,
+                                    size: 20,
+                                  ),
+                                  SizedBox(width: 14),
+                                  Text(
+                                    'Edit',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        return FadeTransition(
+          opacity: anim1,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(
+              CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic),
+            ),
+            alignment: Alignment.topRight,
+            child: child,
+          ),
+        );
+      },
+    ).then((_) {
+      if (mounted) setState(() => _isMoreMenuOpen = false);
+    });
+  }
+
   void _showCreateDialog(
     BuildContext context,
     AllFilesViewModel viewModel,
     bool isFolder,
   ) {
-    final TextEditingController _controller = TextEditingController();
-    final String typeName = isFolder ? "folder" : "file";
+    final TextEditingController controller = TextEditingController();
     String? errorMessage;
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
+          builder: (context, setDialogState) {
             return AlertDialog(
-              backgroundColor: const Color(0xFF16191E),
-              title: Text(
-                'New $typeName',
-                style: const TextStyle(color: Colors.white),
+              backgroundColor: const Color(0xFF161917),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+                side: const BorderSide(color: Color(0xFF262A28), width: 1),
               ),
-              content: TextField(
-                controller: _controller,
-                autofocus: true,
-                cursorColor: AppTheme.accentLime,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Enter $typeName name',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  errorText: errorMessage,
-                  enabledBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: Color(0xFF4A525A)),
+              titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+              actionsPadding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+              title: Row(
+                children: [
+                  Icon(
+                    isFolder
+                        ? Icons.create_new_folder_outlined
+                        : Icons.note_add_outlined,
+                    color: AppTheme.accentLime,
+                    size: 24,
                   ),
-                  focusedBorder: const UnderlineInputBorder(
-                    borderSide: BorderSide(color: AppTheme.accentLime),
+                  const SizedBox(width: 12),
+                  Text(
+                    isFolder ? 'New folder' : 'New file',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F1210),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: errorMessage != null
+                            ? Colors.red
+                            : const Color(0xFF262A28),
+                        width: 1,
+                      ),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      cursorColor: AppTheme.accentLime,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: isFolder ? 'Folder name' : 'file.txt',
+                        hintStyle: const TextStyle(
+                          color: Color(0xFF78828A),
+                          fontSize: 14,
+                        ),
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      errorMessage!,
+                      style: const TextStyle(
+                        color: Color(0xFFFF5252),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
                     'Cancel',
-                    style: TextStyle(color: Colors.white54),
+                    style: TextStyle(
+                      color: Color(0xFF78828A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                TextButton(
-                  onPressed: () {
-                    final name = _controller.text.trim();
+                GestureDetector(
+                  onTap: () {
+                    final name = controller.text.trim();
                     if (name.isNotEmpty) {
                       if (isFolder) {
                         viewModel.createNewFolder(name);
                         Navigator.pop(context);
                       } else {
                         if (!name.contains('.')) {
-                          setState(() {
+                          setDialogState(() {
                             errorMessage =
                                 'File must have an extension (e.g. .txt)';
                           });
@@ -744,16 +1134,27 @@ class _AllFilesViewState extends State<AllFilesView> {
                         }
                       }
                     } else {
-                      setState(() {
+                      setDialogState(() {
                         errorMessage = 'Name cannot be empty';
                       });
                     }
                   },
-                  child: const Text(
-                    'Create',
-                    style: TextStyle(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
                       color: AppTheme.accentLime,
-                      fontWeight: FontWeight.w700,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      'Create',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
@@ -766,48 +1167,112 @@ class _AllFilesViewState extends State<AllFilesView> {
   }
 
   Widget _buildPasteNavBar(BuildContext context, AllFilesViewModel viewModel) {
-    return BottomNavigationBar(
-      backgroundColor: const Color(0xFF0E1114),
-      selectedItemColor: AppTheme.accentLime,
-      unselectedItemColor: const Color(0xFF78828A),
-      showUnselectedLabels: true,
-      type: BottomNavigationBarType.fixed,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.close), label: 'Cancel'),
-        BottomNavigationBarItem(icon: Icon(Icons.paste), label: 'Paste'),
-      ],
-      onTap: (index) async {
-        if (index == 0) {
-          viewModel.cancelPaste();
-        } else if (index == 1) {
-          // Show progress dialog
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) => PasteProgressDialog(viewModel: viewModel),
-          );
-
-          final error = await viewModel.pasteClipboard();
-
-          // Close progress dialog
-          if (Navigator.canPop(context)) {
-            Navigator.pop(context);
-          }
-
-          if (error != null && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  error,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                backgroundColor: Colors.red.shade800,
-                duration: const Duration(seconds: 3),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Container(
+          height: 68,
+          padding: const EdgeInsets.all(5.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141715),
+            borderRadius: BorderRadius.circular(38),
+            border: Border.all(color: const Color(0xFF262A28), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.65),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
-            );
-          }
-        }
-      },
+            ],
+          ),
+          child: Row(
+            children: [
+              InkWell(
+                onTap: () => viewModel.cancelPaste(),
+                borderRadius: BorderRadius.circular(32),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 19,
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (ctx) =>
+                          PasteProgressDialog(viewModel: viewModel),
+                    );
+                    final error = await viewModel.pasteClipboard();
+                    if (context.mounted && Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                    if (error != null && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            error,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          backgroundColor: Colors.red.shade800,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    height: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentLime,
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(
+                          Icons.assignment_outlined,
+                          color: Colors.black,
+                          size: 20,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Paste here',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -815,38 +1280,90 @@ class _AllFilesViewState extends State<AllFilesView> {
     BuildContext context,
     AllFilesViewModel viewModel,
   ) {
-    return BottomNavigationBar(
-      backgroundColor: const Color(0xFF0E1114),
-      selectedItemColor: AppTheme.accentLime,
-      unselectedItemColor: const Color(0xFF78828A),
-      showUnselectedLabels: true,
-      type: BottomNavigationBarType.fixed,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.share), label: 'Share'),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.bookmark_border),
-          label: 'Tag',
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Container(
+          height: 62,
+          decoration: BoxDecoration(
+            color: const Color(0xFF141715),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: const Color(0xFF262A28), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.65),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildSelectionBarItem(
+                icon: Icons.share_outlined,
+                label: 'Share',
+                color: AppTheme.accentLime,
+                onTap: () => _showShareSheet(context, viewModel),
+              ),
+              _buildSelectionBarItem(
+                icon: Icons.bookmark_border_rounded,
+                label: 'Tag',
+                color: Colors.white,
+                onTap: () => _showTagSelectionSheet(context, viewModel),
+              ),
+              _buildSelectionBarItem(
+                icon: Icons.copy_rounded,
+                label: 'Copy',
+                color: Colors.white,
+                onTap: () => viewModel.copySelected(),
+              ),
+              _buildSelectionBarItem(
+                icon: Icons.delete_outline_rounded,
+                label: 'Delete',
+                color: const Color(0xFFFF5252),
+                onTap: () => _showDeleteConfirmationDialog(context, viewModel),
+              ),
+              _buildSelectionBarItem(
+                icon: Icons.more_vert_rounded,
+                label: 'More',
+                color: Colors.white,
+                onTap: () => _showMoreBottomSheet(context, viewModel),
+              ),
+            ],
+          ),
         ),
-        BottomNavigationBarItem(icon: Icon(Icons.copy), label: 'Copy'),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.delete_outline),
-          label: 'Delete',
+      ),
+    );
+  }
+
+  Widget _buildSelectionBarItem({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
-        BottomNavigationBarItem(icon: Icon(Icons.more_vert), label: 'More'),
-      ],
-      onTap: (index) {
-        if (index == 0) {
-          _showShareSheet(context, viewModel);
-        } else if (index == 1) {
-          _showTagSelectionSheet(context, viewModel);
-        } else if (index == 2) {
-          viewModel.copySelected();
-        } else if (index == 3) {
-          _showDeleteConfirmationDialog(context, viewModel);
-        } else if (index == 4) {
-          _showMoreBottomSheet(context, viewModel);
-        }
-      },
+      ),
     );
   }
 
@@ -884,29 +1401,72 @@ class _AllFilesViewState extends State<AllFilesView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C1E),
-        title: const Text(
-          'Delete Files?',
-          style: TextStyle(color: Colors.white),
+        backgroundColor: const Color(0xFF161917),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFF262A28), width: 1),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+        actionsPadding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+        title: Row(
+          children: const [
+            Icon(
+              Icons.delete_outline_rounded,
+              color: Color(0xFFFF5252),
+              size: 24,
+            ),
+            SizedBox(width: 12),
+            Text(
+              'Delete permanently?',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
         ),
         content: Text(
           'Are you sure you want to permanently delete ${viewModel.selectedPaths.length} item(s)? This action cannot be undone.',
-          style: const TextStyle(color: Colors.white54, fontSize: 14),
+          style: const TextStyle(
+            color: Color(0xFF9E9E9E),
+            fontSize: 14,
+            height: 1.4,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text(
               'Cancel',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(
+                color: Color(0xFF78828A),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          TextButton(
-            onPressed: () {
+          GestureDetector(
+            onTap: () {
               Navigator.pop(ctx);
               viewModel.deleteSelectedFiles();
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF5252),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'Delete',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -914,50 +1474,157 @@ class _AllFilesViewState extends State<AllFilesView> {
   }
 
   void _showMoreBottomSheet(BuildContext context, AllFilesViewModel viewModel) {
+    final count = viewModel.selectedPaths.length;
+    String title = 'Selected';
+    String subtitle = '$count selected';
+
+    if (count == 1) {
+      final firstPath = viewModel.selectedPaths.first;
+      final item = viewModel.items.cast<FileItemModel?>().firstWhere(
+        (element) => element?.path == firstPath,
+        orElse: () => null,
+      );
+      title = firstPath.split('/').last;
+      if (item != null) {
+        if (item.isDirectory) {
+          subtitle = '1 selected · ${item.itemCount} items';
+        } else {
+          subtitle =
+              '1 selected · ${item.categoryHint.isNotEmpty ? item.categoryHint : 'File'}';
+        }
+      } else {
+        subtitle = '1 selected';
+      }
+    }
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1C1C1E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: const Text('Cut', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.pop(context);
-                  viewModel.cutSelected();
-                },
-              ),
-              const Divider(color: Colors.grey, height: 1),
-              ListTile(
-                title: const Text(
-                  'Details',
-                  style: TextStyle(color: Colors.white),
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          decoration: const BoxDecoration(
+            color: Color(0xFF141715),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border(
+              top: BorderSide(color: Color(0xFF262A28), width: 1),
+              left: BorderSide(color: Color(0xFF262A28), width: 1),
+              right: BorderSide(color: Color(0xFF262A28), width: 1),
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3A3F3D),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showDetailsDialog(context, viewModel);
-                },
-              ),
-              const Divider(color: Colors.grey, height: 1),
-              ListTile(
-                title: const Text(
-                  'Rename',
-                  style: TextStyle(color: Colors.white),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showRenameDialog(context, viewModel);
-                },
-              ),
-            ],
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF78828A),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionSquircleCard(
+                        icon: Icons.content_cut_rounded,
+                        label: 'Cut',
+                        onTap: () {
+                          Navigator.pop(context);
+                          viewModel.cutSelected();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionSquircleCard(
+                        icon: Icons.info_outline_rounded,
+                        label: 'Details',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showDetailsDialog(context, viewModel);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionSquircleCard(
+                        icon: Icons.edit_outlined,
+                        label: 'Rename',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showRenameDialog(context, viewModel);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildActionSquircleCard({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B1F1D),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFF262A28), width: 1),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppTheme.accentLime, size: 24),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -970,21 +1637,48 @@ class _AllFilesViewState extends State<AllFilesView> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF16191E),
-        title: const Text('Rename', style: TextStyle(color: Colors.white)),
-        content: TextField(
-          controller: textController,
-          autofocus: true,
-          cursorColor: AppTheme.accentLime,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'New name',
-            hintStyle: TextStyle(color: Colors.white54),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFF4A525A)),
+        backgroundColor: const Color(0xFF161917),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFF262A28), width: 1),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+        actionsPadding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+        title: Row(
+          children: const [
+            Icon(Icons.edit_outlined, color: AppTheme.accentLime, size: 24),
+            SizedBox(width: 12),
+            Text(
+              'Rename',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: AppTheme.accentLime),
+          ],
+        ),
+        content: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F1210),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF262A28), width: 1),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: TextField(
+            controller: textController,
+            autofocus: true,
+            cursorColor: AppTheme.accentLime,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+            decoration: const InputDecoration(
+              hintText: 'New name',
+              hintStyle: TextStyle(color: Color(0xFF78828A), fontSize: 14),
+              border: InputBorder.none,
             ),
           ),
         ),
@@ -993,11 +1687,15 @@ class _AllFilesViewState extends State<AllFilesView> {
             onPressed: () => Navigator.pop(ctx),
             child: const Text(
               'Cancel',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(
+                color: Color(0xFF78828A),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          TextButton(
-            onPressed: () async {
+          GestureDetector(
+            onTap: () async {
               final newName = textController.text.trim();
               if (newName.isNotEmpty && newName != currentName) {
                 Navigator.pop(ctx);
@@ -1011,11 +1709,19 @@ class _AllFilesViewState extends State<AllFilesView> {
                 Navigator.pop(ctx);
               }
             },
-            child: const Text(
-              'Ok',
-              style: TextStyle(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+              decoration: BoxDecoration(
                 color: AppTheme.accentLime,
-                fontWeight: FontWeight.w700,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'Save',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),
@@ -1031,46 +1737,162 @@ class _AllFilesViewState extends State<AllFilesView> {
     final details = await viewModel.getDetailsForSelected();
     if (details == null || !context.mounted) return;
 
-    showDialog(
+    final name = details['Name'] ?? 'Details';
+    final isFolder = details['Type'] == 'Folder';
+
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF16191E),
-        title: const Text('Details', style: TextStyle(color: Colors.white)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: details.entries.map((e) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          decoration: const BoxDecoration(
+            color: Color(0xFF141715),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border(
+              top: BorderSide(color: Color(0xFF262A28), width: 1),
+              left: BorderSide(color: Color(0xFF262A28), width: 1),
+              right: BorderSide(color: Color(0xFF262A28), width: 1),
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3A3F3D),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
                   children: [
-                    Text(
-                      e.key,
-                      style: const TextStyle(
-                        color: Colors.white54,
-                        fontSize: 13,
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E2220),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        isFolder
+                            ? Icons.folder_rounded
+                            : Icons.insert_drive_file_rounded,
+                        color: const Color(0xFF78828A),
+                        size: 24,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      e.value,
-                      style: const TextStyle(color: Colors.white, fontSize: 15),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'DETAILS',
+                            style: TextStyle(
+                              color: Color(0xFF78828A),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            name,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              );
-            }).toList(),
+                const SizedBox(height: 16),
+                const Divider(
+                  color: Color(0xFF222624),
+                  height: 1,
+                  thickness: 1,
+                ),
+                const SizedBox(height: 12),
+                if (details.containsKey('Path'))
+                  _buildDetailRow('Path', details['Path']!),
+                if (details.containsKey('Modified'))
+                  _buildDetailRow('Modified', details['Modified']!),
+                if (details.containsKey('Type'))
+                  _buildDetailRow('Type', details['Type']!),
+                if (details.containsKey('Items inside'))
+                  _buildDetailRow('Items inside', details['Items inside']!)
+                else if (details.containsKey('Size'))
+                  _buildDetailRow('Size', details['Size']!),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accentLime,
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Ok',
-              style: TextStyle(
-                color: AppTheme.accentLime,
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF78828A),
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -1325,8 +2147,28 @@ class PasteProgressDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: const Color(0xFF16191E),
-      title: const Text('Pasting Files', style: TextStyle(color: Colors.white)),
+      backgroundColor: const Color(0xFF161917),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: Color(0xFF262A28), width: 1),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+      actionsPadding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+      title: Row(
+        children: const [
+          Icon(Icons.content_paste_rounded, color: AppTheme.accentLime, size: 24),
+          SizedBox(width: 12),
+          Text(
+            'Pasting files',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
       content: ListenableBuilder(
         listenable: viewModel,
         builder: (context, _) {
@@ -1336,18 +2178,22 @@ class PasteProgressDialog extends StatelessWidget {
             children: [
               Text(
                 viewModel.pasteStatus,
-                style: const TextStyle(color: Colors.white54, fontSize: 13),
+                style: const TextStyle(color: Color(0xFF78828A), fontSize: 13),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 16),
-              LinearProgressIndicator(
-                value: viewModel.pasteProgress > 0
-                    ? viewModel.pasteProgress
-                    : null,
-                backgroundColor: const Color(0xFF14171B),
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  AppTheme.accentLime,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: LinearProgressIndicator(
+                  minHeight: 6,
+                  value: viewModel.pasteProgress > 0
+                      ? viewModel.pasteProgress
+                      : null,
+                  backgroundColor: const Color(0xFF0F1210),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppTheme.accentLime,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -1355,7 +2201,11 @@ class PasteProgressDialog extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: Text(
                   '${(viewModel.pasteProgress * 100).toInt()}%',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -1369,11 +2219,14 @@ class PasteProgressDialog extends StatelessWidget {
           },
           child: const Text(
             'Cancel',
-            style: TextStyle(color: Colors.white54),
+            style: TextStyle(
+              color: Color(0xFF78828A),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
     );
   }
 }
-

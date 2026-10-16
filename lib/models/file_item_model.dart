@@ -2,9 +2,9 @@ class FileItemModel {
   final String name;
   final String path;
   final bool isDirectory;
-  final int itemCount; // Valid if isDirectory == true
+  final int itemCount;
   final DateTime modifiedDate;
-  final String categoryHint; // e.g. 'Downloads', 'Documents' for custom icons
+  final String categoryHint;
 
   FileItemModel({
     required this.name,

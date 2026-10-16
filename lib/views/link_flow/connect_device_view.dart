@@ -500,7 +500,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Drag Handle
           Center(
             child: Container(
               width: 44,
@@ -513,7 +512,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
             ),
           ),
 
-          // Header Title
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(
@@ -527,8 +525,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
             ),
           ),
 
-          // USB / Both Mode: "Open tethering settings" button & "Refresh network"
-          // In Wi-Fi mode: NO tethering button as instructed!
           if (widget.isUsbMode || widget.isBothMode) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
@@ -587,16 +583,13 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
             const SizedBox(height: 18),
           ],
 
-          // Segmented Pill Bar (Scan QR | My QR | Manual IP)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: _buildSegmentedPillBar(hasCamera),
           ),
 
-          // Inline Error Banner if any
           if (_scanError != null) _buildInlineErrorBanner(),
 
-          // Tab Content
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -698,7 +691,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     );
   }
 
-  // ── Tab 1: Scan QR ──────────────────────────────────────────
   Widget _buildScannerTab() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -714,7 +706,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           children: [
             MobileScanner(onDetect: _handleQrDetect),
 
-            // Large Lime Reticle Corner Brackets
             const _ScannerReticleWidget(
               size: 210,
               cornerLength: 42,
@@ -745,7 +736,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                 ),
               ),
 
-            // Bottom guidance label
             if (!_isConnecting)
               const Positioned(
                 bottom: 24,
@@ -767,7 +757,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     );
   }
 
-  // ── Tab 2: My QR ────────────────────────────────────────────
   Widget _buildMyQrTab(String qrData, String currentToken) {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -776,7 +765,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
         children: [
           const SizedBox(height: 10),
 
-          // Rounded White QR Card
           Container(
             padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
@@ -806,7 +794,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           ),
           const SizedBox(height: 20),
 
-          // Device Name
           Text(
             _myDeviceName,
             style: const TextStyle(
@@ -818,7 +805,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           ),
           const SizedBox(height: 24),
 
-          // Info Rows (IP Address & Token)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Column(
@@ -844,6 +830,31 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                     ),
                   ],
                 ),
+                if ((widget.isUsbMode || widget.isBothMode) &&
+                    (_usbPhoneIp != null || _usbPeerIp != null)) ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'USB IP',
+                        style: TextStyle(
+                          color: Color(0xFF78828A),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        _usbPeerIp ?? _usbPhoneIp ?? '',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -888,7 +899,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
     );
   }
 
-  // ── Tab 3: Manual IP ────────────────────────────────────────
   Widget _buildManualTab() {
     final token = _tokenController.text;
 
@@ -897,7 +907,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Target IP address label
           const Text(
             'Target IP address',
             style: TextStyle(
@@ -908,7 +917,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           ),
           const SizedBox(height: 6),
 
-          // IP TextField
           TextField(
             controller: _ipController,
             style: const TextStyle(
@@ -936,7 +944,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           const Divider(color: Color(0xFF1E2228), height: 1, thickness: 1),
           const SizedBox(height: 24),
 
-          // 6-digit token label row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -960,12 +967,10 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           ),
           const SizedBox(height: 12),
 
-          // 6 Rounded Digit Input Boxes
           GestureDetector(
             onTap: () => _tokenFocusNode.requestFocus(),
             child: Stack(
               children: [
-                // Hidden TextField to receive key input
                 Opacity(
                   opacity: 0.0,
                   child: TextField(
@@ -979,7 +984,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                     ),
                   ),
                 ),
-                // Visible 6 boxes
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: List.generate(6, (i) {
@@ -1020,7 +1024,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
 
           const Spacer(),
 
-          // Full-width Lime "Connect" button
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -1072,9 +1075,6 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-//  Scanner Reticle Widget & Painter
-// ══════════════════════════════════════════════════════════════
 class _ScannerReticleWidget extends StatelessWidget {
   final double size;
   final double cornerLength;
@@ -1134,7 +1134,6 @@ class _ReticlePainter extends CustomPainter {
     final r = cornerRadius;
     final l = cornerLength;
 
-    // Top-Left ┌
     final tl = Path()
       ..moveTo(0, l)
       ..lineTo(0, r)
@@ -1142,7 +1141,6 @@ class _ReticlePainter extends CustomPainter {
       ..lineTo(l, 0);
     canvas.drawPath(tl, paint);
 
-    // Top-Right ┐
     final tr = Path()
       ..moveTo(w - l, 0)
       ..lineTo(w - r, 0)
@@ -1150,7 +1148,6 @@ class _ReticlePainter extends CustomPainter {
       ..lineTo(w, l);
     canvas.drawPath(tr, paint);
 
-    // Bottom-Left └
     final bl = Path()
       ..moveTo(0, h - l)
       ..lineTo(0, h - r)
@@ -1158,7 +1155,6 @@ class _ReticlePainter extends CustomPainter {
       ..lineTo(l, h);
     canvas.drawPath(bl, paint);
 
-    // Bottom-Right ┘
     final br = Path()
       ..moveTo(w - l, h)
       ..lineTo(w - r, h)

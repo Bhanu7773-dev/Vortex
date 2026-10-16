@@ -166,7 +166,6 @@ class _HomeViewState extends State<HomeView> {
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
-        // ── Top Header ────────────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: SafeArea(
             bottom: false,
@@ -231,7 +230,6 @@ class _HomeViewState extends State<HomeView> {
           ),
         ),
 
-        // ── Linked Devices banner (if active) ─────────────────────────────────
         SliverToBoxAdapter(
           child: Consumer<ConnectionManager>(
             builder: (context, cm, _) {
@@ -241,7 +239,6 @@ class _HomeViewState extends State<HomeView> {
           ),
         ),
 
-        // ── Storage Section ───────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: GestureDetector(
             onTap: () => Navigator.push(
@@ -253,13 +250,51 @@ class _HomeViewState extends State<HomeView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Free space',
-                    style: TextStyle(
-                      color: AppTheme.textMuted,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Free space',
+                        style: TextStyle(
+                          color: AppTheme.textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF14171A),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF22262C),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Text(
+                              'Internal storage',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(width: 3),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              color: AppTheme.accentLime,
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   Row(
@@ -297,7 +332,6 @@ class _HomeViewState extends State<HomeView> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  // Segmented Tally Barcode Progress Bar
                   LayoutBuilder(
                     builder: (context, constraints) {
                       const barWidth = 3.5;
@@ -357,13 +391,11 @@ class _HomeViewState extends State<HomeView> {
 
         const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-        // ── Hero Category Cards (Photos & Videos) ─────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                // Photos Card (Solid Lime)
                 Expanded(
                   child: GestureDetector(
                     onTap: () => _openCategory(context, 'Photos', viewModel),
@@ -412,7 +444,6 @@ class _HomeViewState extends State<HomeView> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Videos Card (Dark Charcoal)
                 Expanded(
                   child: GestureDetector(
                     onTap: () => _openCategory(context, 'Videos', viewModel),
@@ -471,7 +502,6 @@ class _HomeViewState extends State<HomeView> {
 
         const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-        // ── Category List Rows (Audio, Documents, APKs, Archives) ─────────────
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -512,7 +542,6 @@ class _HomeViewState extends State<HomeView> {
 
         const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-        // ── Sources Section ───────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
@@ -556,7 +585,6 @@ class _HomeViewState extends State<HomeView> {
           ),
         ),
 
-        // ── Extra sections (Quick Access & Tags if any exist) ─────────────────
         ...viewModel.sections
             .where((s) => s.title != 'Sources' && s.items.isNotEmpty)
             .map(
@@ -637,7 +665,6 @@ class _HomeViewState extends State<HomeView> {
               ),
             ),
 
-        // Space at bottom for floating dock
         const SliverToBoxAdapter(child: SizedBox(height: 90)),
       ],
     );

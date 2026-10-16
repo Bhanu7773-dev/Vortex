@@ -47,7 +47,6 @@ class PhotosViewModel extends ChangeNotifier {
     isLoading = true;
     if (!_disposed) notifyListeners();
 
-    // Map from folder path -> list of photo files in that folder (non-recursive)
     final Map<String, List<File>> folderMap = {};
 
     final volumes = await StorageService().getStorageVolumes();
@@ -61,7 +60,6 @@ class PhotosViewModel extends ChangeNotifier {
 
     if (_disposed) return;
 
-    // Build album list — only folders that have at least 1 photo
     final result = <PhotoAlbum>[];
     for (final entry in folderMap.entries) {
       if (entry.value.isNotEmpty) {
@@ -76,7 +74,6 @@ class PhotosViewModel extends ChangeNotifier {
       }
     }
 
-    // Sort by count descending (most photos first)
     result.sort((a, b) => b.count.compareTo(a.count));
 
     albums = result;
@@ -124,7 +121,6 @@ class PhotosViewModel extends ChangeNotifier {
           .list(recursive: false, followLinks: false)
           .toList();
 
-      // Collect photos at this level
       final photos = children
           .whereType<File>()
           .where(
@@ -136,7 +132,6 @@ class PhotosViewModel extends ChangeNotifier {
         map[dir.path] = photos;
       }
 
-      // Recurse into subdirs
       for (final child in children.whereType<Directory>()) {
         try {
           final name = child.path.split('/').last;

@@ -4,7 +4,7 @@ class CategoryModel {
   final String name;
   final IconData icon;
   final Color iconColor;
-  final String info; // Usually item count or size
+  final String info;
   final int badgeCount;
 
   CategoryModel({

@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
 
-// Dirs to skip on every platform during recursive media scans.
 const _kSkipDirs = {
   'Android',
   '.cache',
@@ -34,11 +33,10 @@ const _kSkipDirs = {
 const int _kMaxDepthDesktop = 4;
 const int _kMaxDepthAndroid = 20;
 
-// ─── Model ───────────────────────────────────
 class VideoAlbum {
   final String name;
   final String folderPath;
-  final File coverFile; // first video file (used for placeholder)
+  final File coverFile;
   final int count;
   const VideoAlbum({
     required this.name,
@@ -48,7 +46,6 @@ class VideoAlbum {
   });
 }
 
-// ─── Album-list ViewModel ─────────────────────
 class VideosViewModel extends ChangeNotifier {
   static const _exts = {
     'mp4',
@@ -131,7 +128,6 @@ class VideosViewModel extends ChangeNotifier {
   }
 }
 
-// ─── Detail ViewModel ─────────────────────────
 class VideoAlbumDetailViewModel extends ChangeNotifier {
   static const _exts = {
     'mp4',
@@ -240,7 +236,6 @@ class VideoAlbumDetailViewModel extends ChangeNotifier {
   }
 }
 
-// ─── Media list ViewModel (Audio / Archives / APKs) ─
 class MediaFileItem {
   final File file;
   final String name;

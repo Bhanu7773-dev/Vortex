@@ -37,7 +37,6 @@ class RecentView extends StatelessWidget {
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
-                  // ── Top Header ──────────────────────────────────────────────
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -91,7 +90,6 @@ class RecentView extends StatelessWidget {
                     ),
                   ),
 
-                  // ── Loading state ───────────────────────────────────────────
                   if (viewModel.isLoading)
                     const SliverFillRemaining(
                       hasScrollBody: false,
@@ -101,7 +99,6 @@ class RecentView extends StatelessWidget {
                         ),
                       ),
                     )
-                  // ── Empty state ─────────────────────────────────────────────
                   else if (viewModel.sections.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
@@ -152,7 +149,6 @@ class RecentView extends StatelessWidget {
                         ),
                       ),
                     )
-                  // ── Content List ────────────────────────────────────────────
                   else
                     ...viewModel.sections.map((section) {
                       return SliverPadding(
@@ -160,7 +156,6 @@ class RecentView extends StatelessWidget {
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
                             const SizedBox(height: 18),
-                            // Section header
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -189,7 +184,6 @@ class RecentView extends StatelessWidget {
                               color: const Color(0xFF16191E),
                             ),
                             const SizedBox(height: 6),
-                            // Section items
                             ...section.files.map(
                               (file) => _buildFileRow(context, file),
                             ),
@@ -198,7 +192,6 @@ class RecentView extends StatelessWidget {
                       );
                     }),
 
-                  // Bottom padding for dock
                   const SliverToBoxAdapter(child: SizedBox(height: 90)),
                 ],
               ),
@@ -220,7 +213,6 @@ class RecentView extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            // Extension Badge
             Container(
               width: 48,
               height: 48,
@@ -245,7 +237,6 @@ class RecentView extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 14),
-            // File details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,7 +263,6 @@ class RecentView extends StatelessWidget {
                 ],
               ),
             ),
-            // Share action
             IconButton(
               icon: const Icon(
                 Icons.file_upload_outlined,

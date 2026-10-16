@@ -12,7 +12,6 @@ class HomeViewModel extends ChangeNotifier {
   final PersistenceService _persistenceService = PersistenceService();
   bool _disposed = false;
 
-  // Storage Stats
   String totalStorage = '...';
   String usedStorage = '...';
   double storagePercentage = 0.0;
@@ -47,7 +46,6 @@ class HomeViewModel extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  // Categories Grid Data
   List<CategoryModel> categories = [
     CategoryModel(
       name: 'Photos',
@@ -87,7 +85,6 @@ class HomeViewModel extends ChangeNotifier {
     ),
   ];
 
-  // Sections
   List<ExpandableSectionModel> sections = [
     ExpandableSectionModel(
       title: 'Sources',
@@ -202,7 +199,6 @@ class HomeViewModel extends ChangeNotifier {
     ];
   }
 
-  // Navigation helpers
   void onSectionItemTap(
     BuildContext context,
     String sectionTitle,
@@ -217,7 +213,7 @@ class HomeViewModel extends ChangeNotifier {
       _navigateToPath(
         context,
         itemTitle,
-      ); // items in this section are folder names
+      );
     } else if (sectionTitle == 'Tag') {
       if (itemTitle == 'Create') {
         _createTag(context);
@@ -226,7 +222,7 @@ class HomeViewModel extends ChangeNotifier {
           context,
           MaterialPageRoute(builder: (_) => TagFilesView(tagName: itemTitle)),
         );
-        _loadPersistentData(); // Refresh counts when returning
+        _loadPersistentData();
       }
     }
   }
@@ -252,7 +248,7 @@ class HomeViewModel extends ChangeNotifier {
         }
       }
       await _persistenceService.saveQuickAccessPaths(paths);
-      _loadPersistentData(); // Refresh Home screen
+      _loadPersistentData();
     }
   }
 
@@ -289,7 +285,6 @@ class HomeViewModel extends ChangeNotifier {
   }
 
   void _navigateToPath(BuildContext context, String title) async {
-    // In Quick Access, title is the folder name. We need to find the path.
     final paths = await _persistenceService.loadQuickAccessPaths();
     final path = paths.firstWhere(
       (p) =>
@@ -319,7 +314,7 @@ class HomeViewModel extends ChangeNotifier {
           Platform.environment['USERPROFILE'] ??
           '/';
       if (title == 'Bluetooth')
-        path = '$home/Bluetooth'; // Guessing
+        path = '$home/Bluetooth';
       else if (title == 'Downloads')
         path = '$home/Downloads';
     }
@@ -416,23 +411,17 @@ class HomeViewModel extends ChangeNotifier {
     }
   }
 
-  // Directories that are never useful to scan for media/docs on any platform.
   static const _skipDirNames = {
-    // Android
     'Android',
-    // Linux/macOS hidden + system
     '.cache', '.local', '.config', '.mozilla', '.npm', '.pub-cache',
     '.dart', '.pub', '.gradle', '.android', '.flutter', '.git',
     'node_modules', 'proc', 'sys', 'dev', 'run', 'snap',
-    // Windows
     'AppData', '\$Recycle.Bin', 'Windows', 'Program Files',
     'Program Files (x86)', 'ProgramData',
   };
 
   Future<void> _scanDir(Directory dir, List<int> counts,
       {int depth = 0}) async {
-    // On Linux/macOS/Windows limit recursion depth to avoid scanning
-    // the entire home directory tree and freezing the app.
     final maxDepth = Platform.isAndroid ? 20 : 4;
     if (depth > maxDepth) return;
 
@@ -446,7 +435,6 @@ class HomeViewModel extends ChangeNotifier {
             _countFile(entity.path.split('.').last.toLowerCase(), counts);
           } else if (entity is Directory) {
             final name = entity.path.split('/').last;
-            // Skip hidden dirs (dotfiles) on non-Android platforms
             if (!Platform.isAndroid && name.startsWith('.')) continue;
             if (_skipDirNames.contains(name)) continue;
             await _scanDir(entity, counts, depth: depth + 1);
@@ -454,7 +442,6 @@ class HomeViewModel extends ChangeNotifier {
         } catch (_) {}
       }
     } catch (_) {
-      // This directory is restricted or inaccessible — skip it
     }
   }
 
@@ -462,7 +449,6 @@ class HomeViewModel extends ChangeNotifier {
     final volumes = await _storageService.getStorageVolumes();
     availableVolumes = volumes;
 
-    // Index: [photos, videos, audio, docs, apks, archives]
     final counts = [0, 0, 0, 0, 0, 0];
 
     for (final vol in volumes) {

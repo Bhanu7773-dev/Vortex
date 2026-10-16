@@ -34,7 +34,6 @@ class RecentViewModel with ChangeNotifier {
     }
     if (_disposed) return;
 
-    // Cache stats
     final Map<String, FileStat> statCache = {};
     for (var file in allFiles) {
       if (_disposed) return;
@@ -43,7 +42,6 @@ class RecentViewModel with ChangeNotifier {
       } catch (_) {}
     }
 
-    // Sort by modification time descending (most recent first)
     allFiles.sort((a, b) {
       final statA = statCache[a.path];
       final statB = statCache[b.path];
@@ -51,10 +49,8 @@ class RecentViewModel with ChangeNotifier {
       return statB.modified.compareTo(statA.modified);
     });
 
-    // Limit to 100 most recent
     final recentFiles = allFiles.take(100).toList();
 
-    // Group by date
     final Map<String, List<RecentFileModel>> groups = {};
     for (final file in recentFiles) {
       try {
@@ -83,7 +79,6 @@ class RecentViewModel with ChangeNotifier {
         )
         .toList();
 
-    // Sort sections (Today, Yesterday, then by date)
     const order = ['Today', 'Yesterday'];
     sections.sort((a, b) {
       final idxA = order.indexOf(a.title);

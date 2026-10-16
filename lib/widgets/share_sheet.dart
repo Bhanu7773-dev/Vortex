@@ -1,6 +1,3 @@
-// lib/widgets/share_sheet.dart
-//
-// Public share-sheet widget + helper used by all file views.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -32,7 +29,6 @@ void showVortexShareSheet(
   for (final name in deviceNames) {
     String? ip = connectionManager.getDeviceIp(name);
     if (ip == null) {
-      // Fuzzy match by name against recently discovered devices.
       final match = discoveryService.discoveredServices
           .where((d) => d.name == name || name.startsWith(d.name))
           .firstOrNull;
@@ -56,14 +52,12 @@ void showVortexShareSheet(
   );
 }
 
-// ─── Share sheet widget ───────────────────────────────────────────────────────
-
 class ShareSheetContent extends StatefulWidget {
   final TransferService transferService;
   final ConnectionManager connectionManager;
   final List<String> selectedPaths;
   final List<String> connectedDeviceNames;
-  final Map<String, String?> deviceIps; // name → ip (null = unknown)
+  final Map<String, String?> deviceIps;
   final VoidCallback onSendStarted;
 
   const ShareSheetContent({
@@ -94,14 +88,66 @@ class _ShareSheetContentState extends State<ShareSheetContent> {
         _selectedDevices.length == widget.connectedDeviceNames.length;
   }
 
+  Widget _buildDevicesIllustration() {
+    Widget buildPhone() {
+      return Container(
+        width: 38,
+        height: 60,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF383E3A), width: 2.2),
+        ),
+        alignment: Alignment.bottomCenter,
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Container(
+          width: 14,
+          height: 2.5,
+          decoration: BoxDecoration(
+            color: const Color(0xFF383E3A),
+            borderRadius: BorderRadius.circular(1.5),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        buildPhone(),
+        const SizedBox(width: 10),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(
+            4,
+            (index) => Container(
+              width: 3.5,
+              height: 3.5,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: const BoxDecoration(
+                color: AppTheme.accentLime,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        buildPhone(),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final devices = widget.connectedDeviceNames;
 
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF1C1C1E),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        color: Color(0xFF141715),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: Color(0xFF262A28), width: 1),
+        ),
       ),
       child: SafeArea(
         top: false,
@@ -116,68 +162,133 @@ class _ShareSheetContentState extends State<ShareSheetContent> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white24,
+                    color: const Color(0xFF3A3F3C),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Row(
                 children: [
-                  const Icon(Icons.send, color: AppTheme.accentBlue, size: 22),
-                  const SizedBox(width: 10),
                   const Text(
                     'Send via Vortex',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
                     ),
                   ),
                   const Spacer(),
-                  Text(
-                    '${widget.selectedPaths.length} item${widget.selectedPaths.length == 1 ? '' : 's'}',
-                    style: const TextStyle(
-                      color: AppTheme.textGrey,
-                      fontSize: 13,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF181F1A),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: const Color(0xFF2C382E),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      '${widget.selectedPaths.length} item${widget.selectedPaths.length == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                        color: AppTheme.accentLime,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
 
-              if (devices.isEmpty)
+              if (devices.isEmpty) ...[
+                const SizedBox(height: 38),
+                _buildDevicesIllustration(),
+                const SizedBox(height: 28),
+                const Center(
+                  child: Text(
+                    'No connected devices',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: Column(
-                      children: [
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'Pair with another device first using the Link\nbutton on the home screen.',
+                    style: TextStyle(
+                      color: Color(0xFF78828A),
+                      fontSize: 14.5,
+                      height: 1.4,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 36),
+                GestureDetector(
+                  onTap: () {
+                    context.read<WebShareService>().addFiles(widget.selectedPaths);
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const WebShareView()),
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentLime,
+                      borderRadius: BorderRadius.circular(32),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
                         Icon(
-                          Icons.devices_other,
-                          color: AppTheme.textGrey,
-                          size: 52,
+                          Icons.language_rounded,
+                          color: Colors.black,
+                          size: 22,
                         ),
-                        SizedBox(height: 14),
+                        SizedBox(width: 10),
                         Text(
-                          'No connected devices',
-                          style: TextStyle(color: Colors.white, fontSize: 16),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Pair with another device first using the\nLink button on the home screen.',
+                          'Share via web browser',
                           style: TextStyle(
-                            color: AppTheme.textGrey,
-                            fontSize: 13,
+                            color: Colors.black,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2,
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
                   ),
-                )
-              else ...[
+                ),
+                const SizedBox(height: 14),
+                const Center(
+                  child: Text(
+                    'No app needed on the other device',
+                    style: TextStyle(
+                      color: Color(0xFF78828A),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ] else ...[
+                const SizedBox(height: 20),
                 _DeviceRow(
-                  icon: Icons.all_inclusive,
+                  icon: Icons.all_inclusive_rounded,
                   title: 'Send to all devices',
                   subtitle:
                       '${devices.length} device${devices.length == 1 ? '' : 's'}',
@@ -191,17 +302,17 @@ class _ShareSheetContentState extends State<ShareSheetContent> {
                     }
                   }),
                 ),
-                const SizedBox(height: 6),
-                const Divider(color: Colors.white12, height: 1),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
+                const Divider(color: Color(0xFF262A28), height: 1),
+                const SizedBox(height: 8),
 
                 ...devices.map((name) {
                   final ip = widget.deviceIps[name];
                   final isSelected = _selectedDevices.contains(name);
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.only(bottom: 8),
                     child: _DeviceRow(
-                      icon: Icons.laptop,
+                      icon: Icons.laptop_rounded,
                       title: name,
                       subtitle: ip ?? 'IP unknown',
                       isSelected: isSelected,
@@ -223,65 +334,71 @@ class _ShareSheetContentState extends State<ShareSheetContent> {
 
                 SizedBox(
                   width: double.infinity,
+                  height: 56,
                   child: ElevatedButton.icon(
                     onPressed: _isSending || _selectedDevices.isEmpty
                         ? null
                         : () => _startSending(context),
                     icon: _isSending
                         ? const SizedBox(
-                            width: 16,
-                            height: 16,
+                            width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                              strokeWidth: 2.2,
+                              color: Colors.black,
                             ),
                           )
-                        : const Icon(Icons.send, size: 18),
+                        : const Icon(Icons.send_rounded, size: 20, color: Colors.black),
                     label: Text(
                       _isSending
                           ? 'Sending…'
                           : 'Send to ${_selectedDevices.length} device${_selectedDevices.length == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black,
+                      ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accentBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: AppTheme.accentLime,
+                      foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(32),
                       ),
-                      disabledBackgroundColor: Colors.white12,
+                      disabledBackgroundColor: const Color(0xFF262A28),
                       disabledForegroundColor: Colors.white38,
                     ),
                   ),
                 ),
-              ],
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF00E5FF), width: 1.2),
-                    foregroundColor: const Color(0xFF00E5FF),
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFF262A28), width: 1.2),
+                      foregroundColor: Colors.white,
+                      backgroundColor: const Color(0xFF161917),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
+                      ),
                     ),
+                    icon: const Icon(Icons.language_rounded, size: 20, color: AppTheme.accentLime),
+                    label: const Text(
+                      'Share via web browser',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                    ),
+                    onPressed: () {
+                      context.read<WebShareService>().addFiles(widget.selectedPaths);
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const WebShareView()),
+                      );
+                    },
                   ),
-                  icon: const Icon(Icons.language_rounded, size: 18),
-                  label: const Text(
-                    'Share via Web Browser (No App Needed)',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  onPressed: () {
-                    context.read<WebShareService>().addFiles(widget.selectedPaths);
-                    Navigator.pop(context);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const WebShareView()),
-                    );
-                  },
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -336,8 +453,6 @@ class _ShareSheetContentState extends State<ShareSheetContent> {
   }
 }
 
-// ─── Device row tile ──────────────────────────────────────────────────────────
-
 class _DeviceRow extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -357,32 +472,37 @@ class _DeviceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppTheme.accentBlue.withOpacity(0.12)
-              : Colors.white.withOpacity(0.04),
-          borderRadius: BorderRadius.circular(10),
+              ? AppTheme.accentLime.withOpacity(0.12)
+              : const Color(0xFF161917),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppTheme.accentBlue : Colors.white12,
+            color: isSelected ? AppTheme.accentLime : const Color(0xFF262A28),
+            width: 1,
           ),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
-                color: AppTheme.accentBlue.withOpacity(
-                  isSelected ? 0.25 : 0.12,
-                ),
+                color: isSelected
+                    ? AppTheme.accentLime.withOpacity(0.2)
+                    : const Color(0xFF202522),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: AppTheme.accentBlue, size: 20),
+              child: Icon(
+                icon,
+                color: isSelected ? AppTheme.accentLime : const Color(0xFF78828A),
+                size: 20,
+              ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,13 +512,14 @@ class _DeviceRow extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      color: AppTheme.textGrey,
+                      color: Color(0xFF78828A),
                       fontSize: 12,
                     ),
                   ),
@@ -406,8 +527,10 @@ class _DeviceRow extends StatelessWidget {
               ),
             ),
             Icon(
-              isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: isSelected ? AppTheme.accentBlue : AppTheme.textGrey,
+              isSelected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: isSelected ? AppTheme.accentLime : const Color(0xFF454B47),
               size: 22,
             ),
           ],
@@ -416,8 +539,6 @@ class _DeviceRow extends StatelessWidget {
     );
   }
 }
-
-// ─── Transfer progress dialog ─────────────────────────────────────────────────
 
 String _fmtSpeed(double bps) {
   if (bps >= 1024 * 1024)
@@ -447,7 +568,6 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
   @override
   void initState() {
     super.initState();
-    // Sample speed every 200ms for sparkline
     _speedTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
       final job = widget.transferService.activeJob;
       if (job != null && !job.isComplete && !job.cancelled) {
@@ -480,8 +600,6 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
         content: ListenableBuilder(
           listenable: widget.transferService,
           builder: (context, _) {
-            // Try to track by ID so we see cancelled state even after
-            // activeJob returns null.
             TransferJob? job = widget.transferService.activeJob;
             if (job != null && _trackedJobId == null) {
               _trackedJobId = job.id;
@@ -491,7 +609,6 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
                   .firstOrNull;
             }
 
-            // Job was cancelled — show cancel message, then close.
             if (job != null && job.cancelled) {
               if (!_done) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -615,7 +732,6 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
                       ),
                     ),
                   ],
-                  // Speed sparkline graph
                   if (_speedHistory.length > 2) ...[
                     const SizedBox(height: 12),
                     Container(
@@ -682,7 +798,6 @@ class _TransferProgressDialogState extends State<TransferProgressDialog> {
                   final job = widget.transferService.activeJob;
                   if (job != null) {
                     widget.transferService.cancelJob(job.id);
-                    // Tell the receiver we cancelled.
                     context
                         .read<ConnectionManager>()
                         .sendTransferCancelledBySender(job.deviceName);
@@ -739,17 +854,14 @@ class _SparklinePainter extends CustomPainter {
       }
     }
 
-    // Complete fill path
     fillPath.lineTo(size.width, size.height);
     fillPath.close();
 
-    // Draw fill
     final fillPaint = Paint()
       ..color = fillColor
       ..style = PaintingStyle.fill;
     canvas.drawPath(fillPath, fillPaint);
 
-    // Draw line
     final linePaint = Paint()
       ..color = lineColor
       ..style = PaintingStyle.stroke
@@ -758,7 +870,6 @@ class _SparklinePainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
     canvas.drawPath(path, linePaint);
 
-    // Draw current speed dot at the end
     if (data.isNotEmpty) {
       final lastX = (data.length - 1) * stepX;
       final lastY = size.height - ((data.last / maxValue).clamp(0.0, 1.0) * (size.height - 4)) - 2;

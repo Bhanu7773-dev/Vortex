@@ -10,9 +10,6 @@ import '../widgets/share_sheet.dart';
 import '../viewmodels/media_viewmodels.dart';
 import '../utils/file_opener.dart';
 
-// ══════════════════════════════════════════════════════════════
-//  1. AUDIO VIEW
-// ══════════════════════════════════════════════════════════════
 class AudioView extends StatefulWidget {
   const AudioView({Key? key}) : super(key: key);
 
@@ -38,7 +35,6 @@ class _AudioViewState extends State<AudioView>
   bool _searching = false;
   final _searchCtrl = TextEditingController();
 
-  // Audio playback & live waveform state
   late final AudioPlayer _player;
   late final AnimationController _waveAnimController;
   String? _activeAudioPath;
@@ -279,7 +275,6 @@ class _AudioViewState extends State<AudioView>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Title + Badge row
             Row(
               children: [
                 Expanded(
@@ -316,7 +311,6 @@ class _AudioViewState extends State<AudioView>
             ),
             const SizedBox(height: 12),
 
-            // Waveform Row (Interactive & Moving)
             _AudioWaveform(
               item: item,
               isCurrent: isCurrent,
@@ -327,7 +321,6 @@ class _AudioViewState extends State<AudioView>
             ),
             const SizedBox(height: 10),
 
-            // Metadata Row: Size · Date, plus live position/duration when active
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -474,9 +467,6 @@ class _AudioViewState extends State<AudioView>
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-//  2. DOCUMENTS VIEW
-// ══════════════════════════════════════════════════════════════
 class DocumentsView extends StatefulWidget {
   const DocumentsView({Key? key}) : super(key: key);
 
@@ -615,7 +605,6 @@ class _DocumentsViewState extends State<DocumentsView> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        // Title + Badge row
                                         Row(
                                           children: [
                                             Expanded(
@@ -653,14 +642,12 @@ class _DocumentsViewState extends State<DocumentsView> {
                                         ),
                                         const SizedBox(height: 10),
 
-                                        // Document Visual Ribbon (Structural content lines & path)
                                         _DocumentRibbon(
                                           item: item,
                                           accentColor: badgeColor,
                                         ),
                                         const SizedBox(height: 10),
 
-                                        // Metadata Row
                                         Text(
                                           '${item.sizeLabel} · ${item.dateLabel}',
                                           style: const TextStyle(
@@ -805,9 +792,6 @@ class _DocumentsViewState extends State<DocumentsView> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-//  3. ARCHIVES VIEW
-// ══════════════════════════════════════════════════════════════
 class ArchivesView extends StatefulWidget {
   const ArchivesView({Key? key}) : super(key: key);
 
@@ -940,7 +924,6 @@ class _ArchivesViewState extends State<ArchivesView> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        // Title + Badge row
                                         Row(
                                           children: [
                                             Expanded(
@@ -978,14 +961,12 @@ class _ArchivesViewState extends State<ArchivesView> {
                                         ),
                                         const SizedBox(height: 10),
 
-                                        // Archive Zipper / Compression blocks ribbon
                                         _ArchiveRibbon(
                                           item: item,
                                           accentColor: badgeColor,
                                         ),
                                         const SizedBox(height: 10),
 
-                                        // Metadata Row
                                         Text(
                                           '${item.sizeLabel} · ${item.dateLabel}',
                                           style: const TextStyle(
@@ -1130,9 +1111,6 @@ class _ArchivesViewState extends State<ArchivesView> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-//  4. APKS VIEW
-// ══════════════════════════════════════════════════════════════
 class ApksView extends StatefulWidget {
   const ApksView({Key? key}) : super(key: key);
 
@@ -1227,7 +1205,6 @@ class _ApksViewState extends State<ApksView> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        // Title + Badge row
                                         Row(
                                           children: [
                                             Expanded(
@@ -1265,11 +1242,9 @@ class _ApksViewState extends State<ApksView> {
                                         ),
                                         const SizedBox(height: 10),
 
-                                        // APK Package Ribbon
                                         _ApkRibbon(item: item),
                                         const SizedBox(height: 10),
 
-                                        // Metadata Row with Install Button
                                         Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.spaceBetween,
@@ -1455,10 +1430,6 @@ class _ApksViewState extends State<ApksView> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-//  5. SHARED COMPONENTS & MICRO-WIDGETS
-// ══════════════════════════════════════════════════════════════
-
 /// Exact match for Filter Pills bar in screenshot
 class _PillFilterBar extends StatelessWidget {
   final List<String> filters;
@@ -1595,8 +1566,8 @@ class _AudioWaveform extends StatelessWidget {
   final MediaFileItem item;
   final bool isCurrent;
   final bool isPlaying;
-  final double progress; // 0.0 to 1.0
-  final double animValue; // 0.0 to 1.0 for live equalizer oscillations
+  final double progress;
+  final double animValue;
   final void Function(double ratio) onSeek;
 
   const _AudioWaveform({
@@ -1661,7 +1632,6 @@ class _AudioWaveform extends StatelessWidget {
                 final isPassed = isCurrent && (barRatio <= progress);
                 double h = heights[i] * 24.0;
 
-                // Live dynamic equalizer pulse when audio is playing
                 if (isCurrent && isPlaying) {
                   final dist = (barRatio - progress).abs();
                   if (dist < 0.15) {

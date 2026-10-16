@@ -42,8 +42,6 @@ class DiscoveryService extends ChangeNotifier {
   }
 
   RawDatagramSocket? _receiver;
-  // One sender socket per network interface so broadcasts go out on the
-  // correct interface with the correct source IP address.
   final List<_InterfaceSender> _senders = [];
   bool _isDiscovering = false;
   Timer? _broadcastTimer;
@@ -104,7 +102,6 @@ class DiscoveryService extends ChangeNotifier {
           final host = datagram.address.address;
           final senderName = data['name'] as String;
 
-          // Filter out our own packets by name or source IP.
           if (_registeredName != null && senderName == _registeredName) return;
           if (_localIps.isNotEmpty && _localIps.contains(host)) return;
 
@@ -172,7 +169,6 @@ class DiscoveryService extends ChangeNotifier {
         for (var addr in iface.addresses) {
           if (addr.isLoopback) continue;
 
-          // Skip obviously virtual interfaces (Docker, VirtualBox, VMware, VPN)
           final name = iface.name.toLowerCase();
           if (name.startsWith('docker') ||
               name.startsWith('virbr') ||
@@ -188,8 +184,6 @@ class DiscoveryService extends ChangeNotifier {
           final subnetBcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
 
           try {
-            // Bind sender to THIS interface's IP so the UDP source address
-            // is the correct WiFi/Ethernet IP — not a Docker or VPN address.
             final sock = await RawDatagramSocket.bind(
               InternetAddress(addr.address),
               0,
@@ -211,7 +205,6 @@ class DiscoveryService extends ChangeNotifier {
         }
       }
 
-      // Fallback: if no interface sockets succeeded, use 0.0.0.0 → 255.255.255.255
       if (_senders.isEmpty) {
         final sock = await RawDatagramSocket.bind(
           InternetAddress.anyIPv4,
@@ -277,4 +270,3 @@ class DiscoveryService extends ChangeNotifier {
     notifyListeners();
   }
 }
-

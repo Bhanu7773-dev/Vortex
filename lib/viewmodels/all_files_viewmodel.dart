@@ -24,7 +24,6 @@ class AllFilesViewModel extends ChangeNotifier {
     : currentPath = initialPath ?? '/storage/emulated/0',
       rootPath = '/storage/emulated/0' {
     if (initialPath != null) {
-      // Try to determine the root from initialPath
       if (!initialPath.startsWith('/storage/emulated/0')) {
         final parts = initialPath.split('/');
         if (parts.length > 2 && parts[1] == 'storage') {
@@ -43,7 +42,6 @@ class AllFilesViewModel extends ChangeNotifier {
 
   Future<void> _init() async {
     availableVolumes = await _storageService.getStorageVolumes();
-    // Refresh rootPath from the detected volumes for accuracy
     final currentVol = availableVolumes.firstWhere(
       (v) => currentPath.startsWith(v.path),
       orElse: () => availableVolumes.isNotEmpty
@@ -55,8 +53,6 @@ class AllFilesViewModel extends ChangeNotifier {
             ),
     );
     rootPath = currentVol.path;
-    // On non-Android platforms (Linux/macOS/Windows) the default
-    // '/storage/emulated/0' doesn't exist — reset to the actual root.
     if (!Directory(currentPath).existsSync()) {
       currentPath = rootPath;
     }
@@ -74,7 +70,6 @@ class AllFilesViewModel extends ChangeNotifier {
     for (final path in selectedPaths) {
       await _persistenceService.addPathToTag(tagName, path);
     }
-    // Clear selected paths and exit selection mode after tagging
     selectedPaths.clear();
     isSelectionMode = false;
     if (!_disposed) notifyListeners();
@@ -123,18 +118,16 @@ class AllFilesViewModel extends ChangeNotifier {
   bool isLoading = true;
 
   SortOption currentSort = SortOption.filename;
-  bool isDescending = false; // Default: A-Z
+  bool isDescending = false;
 
   bool isGridView = false;
   bool isSelectionMode = false;
   Set<String> selectedPaths = {};
 
-  // Clipboard State
   List<String> clipboardPaths = [];
   bool isCut = false;
   bool isPasteMode = false;
 
-  // Paste Progress & Cancellation State
   bool isPasting = false;
   double pasteProgress = 0.0;
   String pasteStatus = '';
@@ -143,7 +136,6 @@ class AllFilesViewModel extends ChangeNotifier {
   int _totalItemsToPaste = 0;
   int _itemsPasted = 0;
 
-  // Search State
   bool isSearchMode = false;
   String searchQuery = '';
   List<FileItemModel> searchResults = [];
@@ -170,10 +162,10 @@ class AllFilesViewModel extends ChangeNotifier {
   /// Deep-search recursively from [currentPath], filtering by [query].
   /// Each matching file/folder is appended to [searchResults] live.
   Future<void> deepSearch(String query) async {
-    _searchCancelled = true; // Cancel any previous search run
+    _searchCancelled = true;
     await Future.delayed(
       const Duration(milliseconds: 50),
-    ); // Let previous loop cancel
+    );
     _searchCancelled = false;
 
     searchQuery = query;
@@ -200,7 +192,6 @@ class AllFilesViewModel extends ChangeNotifier {
   Future<void> _deepScanForSearch(Directory dir, String q) async {
     if (_searchCancelled) return;
     try {
-      // Use async list() to avoid blocking the UI thread
       final entities = await dir
           .list(recursive: false, followLinks: false)
           .toList();
@@ -213,7 +204,7 @@ class AllFilesViewModel extends ChangeNotifier {
           int count = 0;
           DateTime modified = DateTime.now();
           try {
-            final stat = await entity.stat(); // async stat
+            final stat = await entity.stat();
             modified = stat.modified;
           } catch (_) {}
           if (isDir) {
@@ -232,13 +223,11 @@ class AllFilesViewModel extends ChangeNotifier {
                 categoryHint: isDir ? '' : _inferCategory(name),
               ),
             );
-          // Batch: notify every 15 results, not per-match
           if (searchResults.length % 15 == 0 && !_disposed) notifyListeners();
         }
         if (entity is Directory && entity.path.split('/').last != 'Android') {
           await _deepScanForSearch(entity, q);
         }
-        // Yield to event loop periodically to keep UI responsive
         await Future.delayed(Duration.zero);
       }
     } catch (_) {}
@@ -254,18 +243,16 @@ class AllFilesViewModel extends ChangeNotifier {
   }
 
   Future<void> _loadDirectory() async {
-    // 1. Serve from cache instantly if available
     if (_cachedDirectories.containsKey(currentPath)) {
       items = _cachedDirectories[currentPath]!;
       isLoading = false;
       if (!_disposed) notifyListeners();
     } else {
-      items = []; // Ensure previous folder data is cleared before loading
+      items = [];
       isLoading = true;
       if (!_disposed) notifyListeners();
     }
 
-    // 2. Fetch fresh data quietly in background
     bool hasPermission = true;
     if (Platform.isAndroid || Platform.isIOS) {
       hasPermission =
@@ -296,7 +283,6 @@ class AllFilesViewModel extends ChangeNotifier {
                           .length;
                     }
                   } catch (e) {
-                    // skip count if listing fails
                   }
                 }
 
@@ -321,7 +307,6 @@ class AllFilesViewModel extends ChangeNotifier {
                   );
                 }
               } catch (e) {
-                // skip individual failed entities
               }
             }
           } catch (e) {
@@ -331,11 +316,9 @@ class AllFilesViewModel extends ChangeNotifier {
           items = freshItems;
           _applySorting();
 
-          // 3. Update cache
           _cachedDirectories[currentPath] = List.from(items);
         }
       } catch (e) {
-        // Handle gracefully
       }
     }
 
@@ -359,7 +342,6 @@ class AllFilesViewModel extends ChangeNotifier {
       }
     }
 
-    // Remove them locally to preserve scroll state
     items.removeWhere((item) => selectedPaths.contains(item.path));
     _cachedDirectories[currentPath] = List.from(items);
 
@@ -387,7 +369,6 @@ class AllFilesViewModel extends ChangeNotifier {
         await File(oldPath).rename(newPath);
       }
 
-      // Preserve scroll state
       final itemIndex = items.indexWhere((element) => element.path == oldPath);
       if (itemIndex != -1) {
         final oldItem = items[itemIndex];
@@ -442,7 +423,6 @@ class AllFilesViewModel extends ChangeNotifier {
       details['Size'] = _formatBytes(stat.size);
     }
 
-    // Unselect automatically after retrieving stats
     selectedPaths.clear();
     isSelectionMode = false;
     if (!_disposed) notifyListeners();
@@ -470,15 +450,15 @@ class AllFilesViewModel extends ChangeNotifier {
   }
 
   String formatDateString(DateTime date) {
-    return DateFormat('d MMM y').format(date); // e.g. "19 Sep 2026"
+    return DateFormat('d MMM y').format(date);
   }
 
   void setSortOption(SortOption option) {
     if (currentSort == option) {
-      isDescending = !isDescending; // Toggle direction if same option clicked
+      isDescending = !isDescending;
     } else {
       currentSort = option;
-      isDescending = false; // Reset to ascending for new sort type
+      isDescending = false;
     }
     _applySorting();
     if (!_disposed) notifyListeners();
@@ -486,8 +466,6 @@ class AllFilesViewModel extends ChangeNotifier {
 
   void _applySorting() {
     items.sort((a, b) {
-      // Always keep folders first regardless of sort direction, unless sorting strictly by "type" maybe?
-      // Standard file managers usually keep folders grouped at the top.
       if (a.isDirectory && !b.isDirectory) return -1;
       if (!a.isDirectory && b.isDirectory) return 1;
 
@@ -500,19 +478,15 @@ class AllFilesViewModel extends ChangeNotifier {
           result = a.modifiedDate.compareTo(b.modifiedDate);
           break;
         case SortOption.size:
-          // We don't have direct size stored yet, fallback to name or add size to FileItemModel later.
-          // For now, size will just fall through to name inside items of the same type.
           result = a.name.toLowerCase().compareTo(b.name.toLowerCase());
           break;
         case SortOption.type:
           if (a.isDirectory && b.isDirectory) {
             result = a.name.toLowerCase().compareTo(b.name.toLowerCase());
           } else {
-            // Extract extension for simple type sort
             final extA = a.name.split('.').last.toLowerCase();
             final extB = b.name.split('.').last.toLowerCase();
             result = extA.compareTo(extB);
-            // If same type, sort by name
             if (result == 0) {
               result = a.name.toLowerCase().compareTo(b.name.toLowerCase());
             }
@@ -533,10 +507,9 @@ class AllFilesViewModel extends ChangeNotifier {
     try {
       if (!await directory.exists()) {
         await directory.create();
-        await _loadDirectory(); // Refresh the list
+        await _loadDirectory();
       }
     } catch (e) {
-      // Handle permission or creation errors
       debugPrint('Failed to create folder: $e');
     }
   }
@@ -550,10 +523,9 @@ class AllFilesViewModel extends ChangeNotifier {
     try {
       if (!await file.exists()) {
         await file.create();
-        await _loadDirectory(); // Refresh the list
+        await _loadDirectory();
       }
     } catch (e) {
-      // Handle permission or creation errors
       debugPrint('Failed to create file: $e');
     }
   }
@@ -590,37 +562,33 @@ class AllFilesViewModel extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  // --- Navigation Methods ---
-
   void navigateTo(String path) {
     pathHistory.add(currentPath);
     currentPath = path;
-    _loadDirectory(); // Reactively reloads the list using the new currentPath
+    _loadDirectory();
   }
 
   bool goBack() {
     if (pathHistory.isNotEmpty) {
       currentPath = pathHistory.removeLast();
       _loadDirectory();
-      return true; // Handled back navigation
+      return true;
     }
-    return false; // Did not handle (e.g., at root, OS should close app/tab)
+    return false;
   }
-
-  // --- Clipboard & Paste Methods ---
 
   void copySelected() {
     clipboardPaths = selectedPaths.toList();
     isCut = false;
     isPasteMode = true;
-    toggleSelectionMode(); // Exit selection UI
+    toggleSelectionMode();
   }
 
   void cutSelected() {
     clipboardPaths = selectedPaths.toList();
     isCut = true;
     isPasteMode = true;
-    toggleSelectionMode(); // Exit selection UI
+    toggleSelectionMode();
   }
 
   void cancelPaste() {
@@ -642,9 +610,8 @@ class AllFilesViewModel extends ChangeNotifier {
         count++;
       } else if (await FileSystemEntity.type(path) ==
           FileSystemEntityType.directory) {
-        count++; // count the directory itself
+        count++;
         try {
-          // recursively count contents
           await for (var _ in Directory(path).list(recursive: true)) {
             count++;
           }
@@ -683,7 +650,6 @@ class AllFilesViewModel extends ChangeNotifier {
         final entityName = srcPath.split('/').last;
         final destPath = '$currentPath/$entityName';
 
-        // Duplicate Check Requirement
         if (await FileSystemEntity.type(destPath) !=
             FileSystemEntityType.notFound) {
           throw Exception('"$entityName" already exists here.');
@@ -728,7 +694,6 @@ class AllFilesViewModel extends ChangeNotifier {
       if (_cancelRequested) {
         pasteStatus = 'Cancelling... Rolling back.';
         if (!_disposed) notifyListeners();
-        // Rollback
         for (final pastedPath in _pastedDestinationPaths) {
           try {
             if (await FileSystemEntity.type(pastedPath) ==
@@ -744,11 +709,10 @@ class AllFilesViewModel extends ChangeNotifier {
         return 'Pasting cancelled.';
       }
 
-      // Success, cleanup state
       isPasting = false;
       cancelPaste();
       await _loadDirectory();
-      return null; // Return null on success
+      return null;
     } catch (e) {
       isPasting = false;
       if (!_disposed) notifyListeners();

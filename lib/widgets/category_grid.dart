@@ -96,7 +96,6 @@ class CategoryGrid extends StatelessWidget {
               .animate()
               .fadeIn(duration: 400.ms)
               .slideX(begin: -0.1, end: 0, duration: 400.ms),
-          // Top row - 3 items
           Row(
             children: List.generate(3, (index) {
               final category = categories[index];
@@ -118,7 +117,6 @@ class CategoryGrid extends StatelessWidget {
             }),
           ),
           const SizedBox(height: 10),
-          // Bottom row - 3 items
           Row(
             children: List.generate(3, (index) {
               final category = categories[index + 3];
@@ -178,14 +176,12 @@ class _ModernCategoryCardState extends State<_ModernCategoryCard> with SingleTic
     _countAnim = IntTween(begin: 0, end: _targetCount).animate(
       CurvedAnimation(parent: _countController, curve: Curves.easeOutCubic),
     );
-    // Delay matches the card's stagger animation
     Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted) _countController.forward();
     });
   }
 
   void _parseInfoString() {
-    // Parse strings like "42 files", "128 items", "1.2 GB"
     final match = RegExp(r'^(\d+)\s*(.*)$').firstMatch(widget.category.info);
     if (match != null) {
       _targetCount = int.tryParse(match.group(1) ?? '0') ?? 0;

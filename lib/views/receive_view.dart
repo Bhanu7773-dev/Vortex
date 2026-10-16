@@ -68,7 +68,6 @@ class ReceiveView extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Summary counter header: 1 failed  2 cancelled  0 active
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Row(
@@ -97,7 +96,6 @@ class ReceiveView extends StatelessWidget {
               ),
               const Divider(height: 1, thickness: 1, color: Color(0xFF14171B)),
 
-              // Content list or empty state
               Expanded(
                 child: jobs.isEmpty
                     ? Center(
@@ -205,7 +203,6 @@ class _ReceiveJobRow extends StatelessWidget {
     final bool isComplete = job.isComplete && !job.hasError;
     final bool isSaving = job.isSaving;
 
-    // Status label and color
     final String statusText;
     final Color statusColor;
     final Color barColor;
@@ -227,7 +224,6 @@ class _ReceiveJobRow extends StatelessWidget {
       statusColor = AppTheme.accentLime;
       barColor = AppTheme.accentLime;
     } else {
-      // Active receiving
       statusText = 'Receiving · $percentInt%  (${job.speedText})';
       statusColor = AppTheme.accentLime;
       barColor = AppTheme.accentLime;
@@ -245,7 +241,6 @@ class _ReceiveJobRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Row 1: File name (Bold White)
               Text(
                 job.fileName,
                 style: const TextStyle(
@@ -259,7 +254,6 @@ class _ReceiveJobRow extends StatelessWidget {
               ),
               const SizedBox(height: 6),
 
-              // Row 2: Status & percentage (Left) and Action button (Right)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -327,12 +321,10 @@ class _ReceiveJobRow extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Row 3: Slim Progress Bar
               LayoutBuilder(
                 builder: (context, constraints) {
                   return Stack(
                     children: [
-                      // Background Track
                       Container(
                         height: 2.5,
                         width: constraints.maxWidth,
@@ -341,7 +333,6 @@ class _ReceiveJobRow extends StatelessWidget {
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      // Progress Fill
                       Container(
                         height: 2.5,
                         width: constraints.maxWidth * barValue,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // True Black & Lime Obsidian color palette
   static const Color backgroundBlack = Color(0xFF000000);
   static const Color obsidianBlack = Color(0xFF000000);
   static const Color surfaceDark = Color(0xFF14171B);

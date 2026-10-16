@@ -15,7 +15,6 @@ class AboutView extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Back Button ────────────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: IconButton(
@@ -30,14 +29,12 @@ class AboutView extends StatelessWidget {
                 ),
               ),
 
-              // ── Hero Section with Concentric Vortex Arcs & Typography ─────
               SizedBox(
                 height: 220,
                 width: double.infinity,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    // Concentric Vortex Rings (Upper Right)
                     Positioned.fill(
                       child: CustomPaint(
                         painter: _VortexArcsPainter(
@@ -45,7 +42,6 @@ class AboutView extends StatelessWidget {
                         ),
                       ),
                     ),
-                    // Giant "Vortex" Heading + Subtitle
                     const Positioned(
                       left: 20,
                       bottom: 8,
@@ -80,7 +76,6 @@ class AboutView extends StatelessWidget {
 
               const SizedBox(height: 36),
 
-              // ── Details Section ───────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
@@ -113,7 +108,6 @@ class AboutView extends StatelessWidget {
 
               const SizedBox(height: 36),
 
-              // ── Features Section ──────────────────────────────────────────
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
@@ -225,13 +219,11 @@ class _VortexArcsPainter extends CustomPainter {
     final cx = size.width * 0.82;
     final cy = 76.0;
 
-    // Center focal point dot
     final dotPaint = Paint()
       ..color = accentColor
       ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(cx, cy), 4.5, dotPaint);
 
-    // Arcs specification: (radius, startAngle, sweepAngle, alpha)
     final arcs = [
       (22.0, -0.6 * pi, 1.65 * pi, 1.0),
       (40.0, 0.1 * pi, 1.55 * pi, 0.95),

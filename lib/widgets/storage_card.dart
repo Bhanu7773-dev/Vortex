@@ -36,7 +36,6 @@ class _StorageCardState extends State<StorageCard> with SingleTickerProviderStat
     _barAnim = Tween<double>(begin: 0, end: widget.percentage.clamp(0.0, 1.0)).animate(
       CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
     );
-    // Start animation after a small delay for visual effect
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) _animController.forward();
     });
@@ -72,7 +71,7 @@ class _StorageCardState extends State<StorageCard> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     final storageColor = _getStorageColor();
     final freeStorage = _calculateFreeStorage();
-    
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -145,24 +144,34 @@ class _StorageCardState extends State<StorageCard> with SingleTickerProviderStat
                     color: storageColor.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: AnimatedBuilder(
-                    animation: _percentAnim,
-                    builder: (context, child) {
-                      return Text(
-                        '${(_percentAnim.value * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          color: storageColor,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedBuilder(
+                        animation: _percentAnim,
+                        builder: (context, child) {
+                          return Text(
+                            '${(_percentAnim.value * 100).toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              color: storageColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: storageColor,
+                        size: 16,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            // Storage bar
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
               child: Stack(
@@ -199,7 +208,6 @@ class _StorageCardState extends State<StorageCard> with SingleTickerProviderStat
               ),
             ),
             const SizedBox(height: 12),
-            // Storage breakdown
             Row(
               children: [
                 _StorageIndicator(
@@ -225,7 +233,6 @@ class _StorageCardState extends State<StorageCard> with SingleTickerProviderStat
   }
 
   String _calculateFreeStorage() {
-    // Parse storage values and calculate free space
     try {
       final totalNum = _parseStorageValue(widget.totalStorage);
       final usedNum = _parseStorageValue(widget.usedStorage);

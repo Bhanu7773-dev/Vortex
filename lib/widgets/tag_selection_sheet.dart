@@ -4,8 +4,7 @@ import '../theme/app_theme.dart';
 class TagSelectionSheet extends StatefulWidget {
   final Function(String) onTagSelected;
 
-  const TagSelectionSheet({Key? key, required this.onTagSelected})
-    : super(key: key);
+  const TagSelectionSheet({super.key, required this.onTagSelected});
 
   @override
   State<TagSelectionSheet> createState() => _TagSelectionSheetState();
@@ -25,26 +24,86 @@ class _TagSelectionSheetState extends State<TagSelectionSheet> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('New Tag'),
-        content: TextField(
-          controller: _customCtrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Enter tag name'),
+        backgroundColor: const Color(0xFF161917),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFF262A28), width: 1),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 22),
+        actionsPadding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
+        title: Row(
+          children: const [
+            Icon(Icons.bookmark_add_outlined, color: AppTheme.accentLime, size: 24),
+            SizedBox(width: 12),
+            Text(
+              'New tag',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        content: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F1210),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF262A28), width: 1),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: TextField(
+            controller: _customCtrl,
+            autofocus: true,
+            cursorColor: AppTheme.accentLime,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+            decoration: const InputDecoration(
+              hintText: 'Enter tag name',
+              hintStyle: TextStyle(color: Color(0xFF78828A), fontSize: 14),
+              border: InputBorder.none,
+            ),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Color(0xFF78828A),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-          TextButton(
-            onPressed: () {
+          GestureDetector(
+            onTap: () {
               if (_customCtrl.text.trim().isNotEmpty) {
                 widget.onTagSelected(_customCtrl.text.trim());
-                Navigator.pop(context); // Dialog
-                Navigator.pop(context); // Sheet
+                Navigator.pop(context);
+                Navigator.pop(context);
               }
             },
-            child: const Text('Save'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.accentLime,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'Save',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -54,49 +113,90 @@ class _TagSelectionSheetState extends State<TagSelectionSheet> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       decoration: const BoxDecoration(
-        color: AppTheme.cardGrey,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        color: Color(0xFF141715),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border(
+          top: BorderSide(color: Color(0xFF262A28), width: 1),
+          left: BorderSide(color: Color(0xFF262A28), width: 1),
+          right: BorderSide(color: Color(0xFF262A28), width: 1),
+        ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Select Tag',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              ..._defaultTags.map(
-                (tag) => ActionChip(
-                  label: Text(tag),
-                  backgroundColor: Colors.white10,
-                  labelStyle: const TextStyle(color: Colors.white),
-                  onPressed: () {
-                    widget.onTagSelected(tag);
-                    Navigator.pop(context);
-                  },
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3A3F3D),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              ActionChip(
-                label: const Text('+ Custom'),
-                backgroundColor: AppTheme.accentBlue.withOpacity(0.2),
-                labelStyle: const TextStyle(color: AppTheme.accentBlue),
-                onPressed: _showCustomTagDialog,
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-        ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: const [
+                Icon(Icons.bookmark_border_rounded, color: AppTheme.accentLime, size: 22),
+                SizedBox(width: 10),
+                Text(
+                  'Select tag',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                ..._defaultTags.map(
+                  (tag) => ActionChip(
+                    label: Text(tag),
+                    backgroundColor: const Color(0xFF1E2220),
+                    side: const BorderSide(color: Color(0xFF262A28), width: 1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    labelStyle: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    onPressed: () {
+                      widget.onTagSelected(tag);
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+                ActionChip(
+                  label: const Text('+ Custom'),
+                  backgroundColor: AppTheme.accentLime.withOpacity(0.12),
+                  side: BorderSide(
+                    color: AppTheme.accentLime.withOpacity(0.4),
+                    width: 1,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  labelStyle: const TextStyle(
+                    color: AppTheme.accentLime,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  onPressed: _showCustomTagDialog,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
