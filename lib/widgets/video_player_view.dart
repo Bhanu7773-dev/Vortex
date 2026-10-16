@@ -324,7 +324,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                   style: TextStyle(
                     color: Color(0xFF78828A),
                     fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -332,9 +332,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                 Text(
                   widget.title,
                   style: const TextStyle(
+                    fontFamily: AppTheme.fontBricolage,
                     color: Colors.white,
                     fontSize: 24,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.5,
                   ),
                   maxLines: 2,

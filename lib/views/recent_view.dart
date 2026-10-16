@@ -47,12 +47,13 @@ class RecentView extends StatelessWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'Received',
                                 style: TextStyle(
+                                  fontFamily: AppTheme.fontBricolage,
                                   color: Colors.white,
                                   fontSize: 32,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                   letterSpacing: -0.5,
                                 ),
                               ),
@@ -62,7 +63,7 @@ class RecentView extends StatelessWidget {
                                 style: const TextStyle(
                                   color: Color(0xFF78828A),
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w400,
                                 ),
                               ),
                             ],
@@ -161,19 +162,21 @@ class RecentView extends StatelessWidget {
                               children: [
                                 Text(
                                   section.title,
-                                  style: const TextStyle(
+                                  style: TextStyle(
+                                    fontFamily: AppTheme.fontBricolage,
                                     color: Colors.white,
                                     fontSize: 20,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w700,
                                     letterSpacing: -0.3,
                                   ),
                                 ),
                                 Text(
                                   '${section.files.length}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF78828A),
+                                  style: TextStyle(
+                                    fontFamily: AppTheme.fontBricolage,
+                                    color: const Color(0xFF78828A),
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ],
@@ -230,7 +233,7 @@ class RecentView extends StatelessWidget {
                   style: const TextStyle(
                     color: AppTheme.accentLime,
                     fontSize: 12,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -257,7 +260,7 @@ class RecentView extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFF78828A),
                       fontSize: 13,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],

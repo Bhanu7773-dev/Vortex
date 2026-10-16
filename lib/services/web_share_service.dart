@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:vortex/services/connection_manager.dart';
+import 'package:vortex/services/transfer_service.dart';
 
 class WebShareFileItem {
   final String path;
@@ -37,6 +39,8 @@ class WebShareFileItem {
 }
 
 class WebShareService extends ChangeNotifier {
+  static const int defaultWebSharePort = 46468;
+
   bool _isEnabled = true;
   bool get isEnabled => _isEnabled;
 
@@ -50,7 +54,11 @@ class WebShareService extends ChangeNotifier {
   String? _detectedIp;
   String? get detectedIp => _detectedIp;
 
-  int get port => ConnectionManager.serverFixedPort;
+  int _port = defaultWebSharePort;
+  int get port => _port;
+
+  HttpServer? _server;
+  Future<void> Function(HttpRequest request)? onUploadHandler;
 
   String get webPortalUrl {
     final ip = _detectedIp ?? '127.0.0.1';
@@ -59,6 +67,13 @@ class WebShareService extends ChangeNotifier {
 
   WebShareService() {
     refreshLocalIp();
+    startServer();
+  }
+
+  @override
+  void dispose() {
+    stopServer();
+    super.dispose();
   }
 
   bool _isUploadCancelled = false;
@@ -75,6 +90,91 @@ class WebShareService extends ChangeNotifier {
 
   void toggleWebShare(bool enabled) {
     _isEnabled = enabled;
+    if (_isEnabled) {
+      startServer();
+    } else {
+      stopServer();
+    }
+    notifyListeners();
+  }
+
+  Future<void> startServer({int? preferredPort}) async {
+    if (!_isEnabled) return;
+    await stopServer();
+
+    final targetPort = preferredPort ?? _port;
+    try {
+      _server = await HttpServer.bind(
+        InternetAddress.anyIPv4,
+        targetPort,
+        shared: true,
+      );
+      _port = _server!.port;
+      debugPrint('[WebShare] Server running on port $_port');
+    } catch (e) {
+      debugPrint('[WebShare] Port $targetPort failed ($e), assigning available port');
+      try {
+        _server = await HttpServer.bind(
+          InternetAddress.anyIPv4,
+          0,
+          shared: true,
+        );
+        _port = _server!.port;
+        debugPrint('[WebShare] Server running on assigned port $_port');
+      } catch (err) {
+        debugPrint('[WebShare] Could not start server: $err');
+        return;
+      }
+    }
+
+    _server!.listen((HttpRequest request) async {
+      request.response.headers.set('Access-Control-Allow-Origin', '*');
+      request.response.headers.set(
+        'Access-Control-Allow-Methods',
+        'GET, POST, OPTIONS',
+      );
+      request.response.headers.set('Access-Control-Allow-Headers', '*');
+
+      if (request.method == 'OPTIONS') {
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..close();
+        return;
+      }
+
+      final handled = await handleHttpRequest(request);
+      if (!handled) {
+        request.response
+          ..statusCode = HttpStatus.notFound
+          ..close();
+      }
+    });
+
+    notifyListeners();
+  }
+
+  Future<void> stopServer() async {
+    if (_server != null) {
+      try {
+        await _server!.close(force: true);
+      } catch (e) {
+        debugPrint('[WebShare] Error closing server: $e');
+      }
+      _server = null;
+    }
+  }
+
+  Future<void> generateNewLink() async {
+    await refreshLocalIp();
+    final random = Random();
+    int newPort;
+    do {
+      newPort = 40000 + random.nextInt(25000);
+    } while (newPort == _port ||
+        newPort == ConnectionManager.serverFixedPort ||
+        newPort == ConnectionManager.tcpTransferPort);
+
+    await startServer(preferredPort: newPort);
     notifyListeners();
   }
 
@@ -112,6 +212,24 @@ class WebShareService extends ChangeNotifier {
             sizeBytes: size,
           ));
         }
+      } else if (Directory(path).existsSync()) {
+        try {
+          final entities =
+              Directory(path).listSync(recursive: true, followLinks: false);
+          for (final entity in entities) {
+            if (entity is File && entity.existsSync()) {
+              final name = entity.path.split(Platform.pathSeparator).last;
+              final size = entity.lengthSync();
+              if (!_sharedFiles.any((f) => f.path == entity.path)) {
+                _sharedFiles.add(WebShareFileItem(
+                  path: entity.path,
+                  name: name,
+                  sizeBytes: size,
+                ));
+              }
+            }
+          }
+        } catch (_) {}
       }
     }
     notifyListeners();
@@ -222,6 +340,15 @@ class WebShareService extends ChangeNotifier {
       return true;
     }
 
+    if (path == '/upload' && request.method == 'POST') {
+      if (onUploadHandler != null) {
+        await onUploadHandler!(request);
+      } else {
+        await _fallbackHandleUpload(request);
+      }
+      return true;
+    }
+
     if (path == '/favicon.ico') {
       request.response
         ..statusCode = HttpStatus.noContent
@@ -230,6 +357,44 @@ class WebShareService extends ChangeNotifier {
     }
 
     return false;
+  }
+
+  Future<void> _fallbackHandleUpload(HttpRequest request) async {
+    try {
+      final encoded = request.headers.value('x-vortex-path') ?? 'received_file';
+      final relativePath = Uri.decodeComponent(encoded);
+      final saveDir = await TransferService.getReceiveDir();
+      final parts = relativePath.split('/');
+      final fileName = parts.last;
+      final targetDir = parts.length > 1
+          ? Directory('${saveDir.path}/${parts.sublist(0, parts.length - 1).join('/')}')
+          : saveDir;
+      if (!targetDir.existsSync()) {
+        await targetDir.create(recursive: true);
+      }
+      final file = File('${targetDir.path}/$fileName');
+      final sink = file.openWrite();
+      await for (final chunk in request) {
+        sink.add(chunk);
+      }
+      await sink.flush();
+      await sink.close();
+
+      registerReceivedFile(relativePath, file.path);
+
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({'status': 'ok', 'path': file.path}))
+        ..close();
+    } catch (e) {
+      debugPrint('[WebShare] Fallback upload failed: $e');
+      try {
+        request.response
+          ..statusCode = HttpStatus.internalServerError
+          ..close();
+      } catch (_) {}
+    }
   }
 
   String _buildPortalHtml() {

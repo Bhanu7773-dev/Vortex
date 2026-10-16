@@ -127,7 +127,7 @@ class ConnectionManager extends ChangeNotifier {
         if (request.uri.path == '/ws') {
           await _handleWebSocketUpgrade(request);
         } else if (request.uri.path == '/upload' && request.method == 'POST') {
-          await _handleUpload(request);
+          await handleUpload(request);
         } else if (webShareHandler != null && await webShareHandler!(request)) {
         } else {
           request.response
@@ -695,7 +695,7 @@ class ConnectionManager extends ChangeNotifier {
     return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2];
   }
 
-  Future<void> _handleUpload(HttpRequest request) async {
+  Future<void> handleUpload(HttpRequest request) async {
     if (_lastHttpUploadCancelTime != null &&
         DateTime.now().difference(_lastHttpUploadCancelTime!).inMilliseconds < 4000) {
       debugPrint('[Upload] Rejecting post-cancel request');

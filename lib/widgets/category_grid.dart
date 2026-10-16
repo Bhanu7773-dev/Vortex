@@ -276,7 +276,7 @@ class _ModernCategoryCardState extends State<_ModernCategoryCard> with SingleTic
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

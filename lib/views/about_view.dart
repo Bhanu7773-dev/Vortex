@@ -51,9 +51,10 @@ class AboutView extends StatelessWidget {
                           Text(
                             'Vortex',
                             style: TextStyle(
+                              fontFamily: AppTheme.fontBricolage,
                               color: Colors.white,
                               fontSize: 54,
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: -1.2,
                               height: 1.0,
                             ),
@@ -64,7 +65,7 @@ class AboutView extends StatelessWidget {
                             style: TextStyle(
                               color: Color(0xFF78828A),
                               fontSize: 15,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w400,
                             ),
                           ),
                         ],
@@ -84,9 +85,10 @@ class AboutView extends StatelessWidget {
                     const Text(
                       'Details',
                       style: TextStyle(
+                        fontFamily: AppTheme.fontBricolage,
                         color: Colors.white,
                         fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -0.4,
                       ),
                     ),
@@ -116,9 +118,10 @@ class AboutView extends StatelessWidget {
                     const Text(
                       'Features',
                       style: TextStyle(
+                        fontFamily: AppTheme.fontBricolage,
                         color: Colors.white,
                         fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -0.4,
                       ),
                     ),

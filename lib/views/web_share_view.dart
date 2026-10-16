@@ -53,9 +53,10 @@ class WebShareView extends StatelessWidget {
                               const Text(
                                 'Web share',
                                 style: TextStyle(
+                                  fontFamily: AppTheme.fontBricolage,
                                   color: Colors.black,
                                   fontSize: 20,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w700,
                                   letterSpacing: -0.3,
                                 ),
                               ),
@@ -78,7 +79,7 @@ class WebShareView extends StatelessWidget {
                                 child: QrImageView(
                                   data: url.isNotEmpty
                                       ? url
-                                      : 'http://127.0.0.1:46466/share',
+                                      : 'http://127.0.0.1:${webShare.port}/',
                                   version: QrVersions.auto,
                                   size: 215.0,
                                   backgroundColor: Colors.transparent,
@@ -117,15 +118,17 @@ class WebShareView extends StatelessWidget {
                                   TextSpan(
                                     text: hostPort.$1,
                                     style: const TextStyle(
+                                      fontFamily: AppTheme.fontBricolage,
                                       color: Colors.black,
                                       fontSize: 28,
-                                      fontWeight: FontWeight.w900,
+                                      fontWeight: FontWeight.w700,
                                       letterSpacing: -0.8,
                                     ),
                                   ),
                                   TextSpan(
                                     text: hostPort.$2,
                                     style: TextStyle(
+                                      fontFamily: AppTheme.fontBricolage,
                                       color:
                                           Colors.black.withValues(alpha: 0.45),
                                       fontSize: 28,
@@ -147,11 +150,39 @@ class WebShareView extends StatelessWidget {
                                 label: 'Copy link',
                                 onTap: () {
                                   Clipboard.setData(ClipboardData(text: url));
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Portal link copied!'),
-                                      duration: Duration(seconds: 2),
-                                      backgroundColor: Color(0xFF16191D),
+                                    SnackBar(
+                                      content: Row(
+                                        children: const [
+                                          Icon(
+                                            Icons.check_circle_outline_rounded,
+                                            color: AppTheme.accentLime,
+                                            size: 20,
+                                          ),
+                                          SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              'Portal link copied to clipboard',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                      backgroundColor: const Color(0xFF16191D),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        side: const BorderSide(
+                                          color: Color(0xFF262A28),
+                                          width: 1,
+                                        ),
+                                      ),
                                     ),
                                   );
                                 },
@@ -160,13 +191,42 @@ class WebShareView extends StatelessWidget {
                               _buildPillButton(
                                 icon: Icons.refresh_rounded,
                                 label: 'New link',
-                                onTap: () {
-                                  webShare.refreshLocalIp();
+                                onTap: () async {
+                                  await webShare.generateNewLink();
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Refreshed network link'),
-                                      duration: Duration(seconds: 1),
-                                      backgroundColor: Color(0xFF16191D),
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.refresh_rounded,
+                                            color: AppTheme.accentLime,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              'New link generated (port ${webShare.port})',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                      backgroundColor: const Color(0xFF16191D),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        side: const BorderSide(
+                                          color: Color(0xFF262A28),
+                                          width: 1,
+                                        ),
+                                      ),
                                     ),
                                   );
                                 },
@@ -219,18 +279,20 @@ class WebShareView extends StatelessWidget {
                           const Text(
                             'Staged files',
                             style: TextStyle(
+                              fontFamily: AppTheme.fontBricolage,
                               color: Colors.white,
                               fontSize: 20,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: -0.4,
                             ),
                           ),
                           Text(
                             '${webShare.sharedFiles.length}',
                             style: const TextStyle(
+                              fontFamily: AppTheme.fontBricolage,
                               color: Color(0xFF8E959E),
                               fontSize: 18,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -406,12 +468,53 @@ class WebShareView extends StatelessWidget {
 
                       GestureDetector(
                         onTap: () async {
-                          await Navigator.push(
+                          final selected = await Navigator.push<List<String>>(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const AllFilesView(),
+                              builder: (_) => const AllFilesView(
+                                isFilePickerMode: true,
+                              ),
                             ),
                           );
+                          if (selected != null && selected.isNotEmpty) {
+                            webShare.addFiles(selected);
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.check_circle_outline_rounded,
+                                      color: AppTheme.accentLime,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        '${selected.length} file${selected.length == 1 ? '' : 's'} staged for Web share',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                duration: const Duration(seconds: 2),
+                                backgroundColor: const Color(0xFF16191D),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: const BorderSide(
+                                    color: Color(0xFF262A28),
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
                         },
                         child: Container(
                           height: 54,

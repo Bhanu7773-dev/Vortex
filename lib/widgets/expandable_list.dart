@@ -44,7 +44,7 @@ class _ExpandableSectionState extends State<ExpandableSection> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const Spacer(),
@@ -179,7 +179,7 @@ class _ExpandableSectionState extends State<ExpandableSection> {
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.5),
                           fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -188,7 +188,7 @@ class _ExpandableSectionState extends State<ExpandableSection> {
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -212,20 +212,30 @@ class _ExpandableSectionState extends State<ExpandableSection> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    title: const Text(
+                    title: Text(
                       'Remove Bookmark?',
-                      style: TextStyle(color: Colors.white),
+                      style: TextStyle(
+                        fontFamily: AppTheme.fontBricolage,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     content: Text(
                       'This will remove "$itemTitle" from your Home screen.',
-                      style: TextStyle(color: Colors.white.withOpacity(0.6)),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
                         child: Text(
                           'Cancel',
-                          style: TextStyle(color: Colors.white.withOpacity(0.5)),
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                       ElevatedButton(
@@ -238,7 +248,10 @@ class _ExpandableSectionState extends State<ExpandableSection> {
                           ),
                           elevation: 0,
                         ),
-                        child: const Text('Remove'),
+                        child: const Text(
+                          'Remove',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ],
                   ),
@@ -333,7 +346,7 @@ class _ModernListItemState extends State<_ModernListItem> {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 15,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -349,7 +362,7 @@ class _ModernListItemState extends State<_ModernListItem> {
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.5),
                           fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
@@ -443,7 +456,7 @@ class _BottomSheetOptionState extends State<_BottomSheetOption> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 15,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -452,6 +465,7 @@ class _BottomSheetOptionState extends State<_BottomSheetOption> {
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.5),
                       fontSize: 12,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],

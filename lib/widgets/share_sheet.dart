@@ -173,9 +173,10 @@ class _ShareSheetContentState extends State<ShareSheetContent> {
                   const Text(
                     'Send via Vortex',
                     style: TextStyle(
+                      fontFamily: AppTheme.fontBricolage,
                       color: Colors.white,
                       fontSize: 24,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.5,
                     ),
                   ),

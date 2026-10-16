@@ -89,9 +89,10 @@ class _AudioPlayerSheetState extends State<AudioPlayerSheet> {
             widget.title,
             textAlign: TextAlign.center,
             style: const TextStyle(
+              fontFamily: AppTheme.fontBricolage,
               color: Colors.white,
               fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,

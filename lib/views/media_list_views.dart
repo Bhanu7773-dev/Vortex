@@ -451,9 +451,10 @@ class _AudioViewState extends State<AudioView>
       title: const Text(
         'Audio',
         style: TextStyle(
+          fontFamily: AppTheme.fontBricolage,
           color: Colors.white,
           fontSize: 22,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: -0.3,
         ),
       ),
@@ -776,9 +777,10 @@ class _DocumentsViewState extends State<DocumentsView> {
       title: const Text(
         'Documents',
         style: TextStyle(
+          fontFamily: AppTheme.fontBricolage,
           color: Colors.white,
           fontSize: 22,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: -0.3,
         ),
       ),
@@ -1095,9 +1097,10 @@ class _ArchivesViewState extends State<ArchivesView> {
       title: const Text(
         'Archives',
         style: TextStyle(
+          fontFamily: AppTheme.fontBricolage,
           color: Colors.white,
           fontSize: 22,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: -0.3,
         ),
       ),
@@ -1414,9 +1417,10 @@ class _ApksViewState extends State<ApksView> {
       title: const Text(
         'APKs',
         style: TextStyle(
+          fontFamily: AppTheme.fontBricolage,
           color: Colors.white,
           fontSize: 22,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: -0.3,
         ),
       ),
@@ -1482,7 +1486,7 @@ class _PillFilterBar extends StatelessWidget {
                 f,
                 style: TextStyle(
                   color: isSelected ? Colors.black : const Color(0xFFD6DCE2),
-                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
               ),
@@ -1516,7 +1520,7 @@ class _MediaCountHeader extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFF78828A),
               fontSize: 13,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w400,
             ),
           ),
         ),
@@ -1553,7 +1557,7 @@ class _ExtBadge extends StatelessWidget {
         style: TextStyle(
           color: color,
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
         ),
       ),

@@ -42,6 +42,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
       connectionManager.startServer();
 
       final webShareService = context.read<WebShareService>();
+      webShareService.onUploadHandler = connectionManager.handleUpload;
       connectionManager.webShareHandler = webShareService.handleHttpRequest;
 
       connectionManager.onConnectionEstablished = () {
@@ -222,7 +223,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                                 style: TextStyle(
                                   color: AppTheme.accentLime,
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
@@ -242,7 +243,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                               style: TextStyle(
                                 color: Color(0xFF78828A),
                                 fontSize: 11,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -288,7 +289,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                                 style: TextStyle(
                                   color: AppTheme.accentLime,
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                             ],
@@ -308,7 +309,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                               style: TextStyle(
                                 color: Color(0xFF78828A),
                                 fontSize: 11,
-                                fontWeight: FontWeight.w400,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -379,8 +380,9 @@ class _MainWrapperViewState extends State<MainWrapperView> {
               const Text(
                 'Connect and share',
                 style: TextStyle(
+                  fontFamily: AppTheme.fontBricolage,
                   fontSize: 24,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
                   letterSpacing: -0.4,
                 ),
@@ -390,7 +392,7 @@ class _MainWrapperViewState extends State<MainWrapperView> {
                 'Choose how to link with another device',
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
                   color: Color(0xFF78828A),
                 ),
               ),

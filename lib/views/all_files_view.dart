@@ -13,10 +13,12 @@ import 'package:vortex/widgets/share_sheet.dart';
 class AllFilesView extends StatefulWidget {
   final String? initialPath;
   final bool isFolderPickerMode;
+  final bool isFilePickerMode;
   const AllFilesView({
     Key? key,
     this.initialPath,
     this.isFolderPickerMode = false,
+    this.isFilePickerMode = false,
   }) : super(key: key);
   @override
   State<AllFilesView> createState() => _AllFilesViewState();
@@ -47,6 +49,7 @@ class _AllFilesViewState extends State<AllFilesView> {
       create: (_) => AllFilesViewModel(
         initialPath: widget.initialPath,
         isFolderPickerMode: widget.isFolderPickerMode,
+        isFilePickerMode: widget.isFilePickerMode,
       ),
       child: Consumer<AllFilesViewModel>(
         builder: (context, viewModel, child) {
@@ -59,34 +62,141 @@ class _AllFilesViewState extends State<AllFilesView> {
             },
             child: Scaffold(
               backgroundColor: Colors.black,
-              floatingActionButton: viewModel.isFolderPickerMode
+              floatingActionButton: viewModel.isFilePickerMode
                   ? FloatingActionButton.extended(
-                      onPressed: () {
-                        if (viewModel.selectedPaths.isEmpty) {
-                          Navigator.pop(context, [viewModel.currentPath]);
-                        } else {
-                          Navigator.pop(
-                            context,
-                            viewModel.selectedPaths.toList(),
-                          );
-                        }
-                      },
+                      onPressed: viewModel.selectedPaths.isEmpty
+                          ? null
+                          : () {
+                              Navigator.pop(
+                                context,
+                                viewModel.selectedPaths.toList(),
+                              );
+                            },
                       label: Text(
                         viewModel.selectedPaths.isEmpty
-                            ? 'Add this folder'
-                            : 'Add ${viewModel.selectedPaths.length} folders',
-                        style: const TextStyle(
-                          color: Colors.black,
+                            ? 'Select files'
+                            : 'Add ${viewModel.selectedPaths.length} file${viewModel.selectedPaths.length == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          color: viewModel.selectedPaths.isEmpty
+                              ? const Color(0xFF78828A)
+                              : Colors.black,
                           fontWeight: FontWeight.w700,
+                          fontFamily: AppTheme.fontInstrument,
                         ),
                       ),
-                      icon: const Icon(Icons.check, color: Colors.black),
-                      backgroundColor: AppTheme.accentLime,
+                      icon: Icon(
+                        Icons.check_rounded,
+                        color: viewModel.selectedPaths.isEmpty
+                            ? const Color(0xFF78828A)
+                            : Colors.black,
+                        size: 22,
+                      ),
+                      backgroundColor: viewModel.selectedPaths.isEmpty
+                          ? const Color(0xFF1E2220)
+                          : AppTheme.accentLime,
                     )
-                  : null,
+                  : (viewModel.isFolderPickerMode
+                      ? FloatingActionButton.extended(
+                          onPressed: () {
+                            if (viewModel.selectedPaths.isEmpty) {
+                              Navigator.pop(context, [viewModel.currentPath]);
+                            } else {
+                              Navigator.pop(
+                                context,
+                                viewModel.selectedPaths.toList(),
+                              );
+                            }
+                          },
+                          label: Text(
+                            viewModel.selectedPaths.isEmpty
+                                ? 'Add this folder'
+                                : 'Add ${viewModel.selectedPaths.length} folders',
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          icon: const Icon(Icons.check, color: Colors.black),
+                          backgroundColor: AppTheme.accentLime,
+                        )
+                      : null),
               appBar: PreferredSize(
                 preferredSize: const Size.fromHeight(kToolbarHeight),
-                child: viewModel.isSelectionMode
+                child: viewModel.isFilePickerMode
+                    ? AppBar(
+                        backgroundColor: Colors.black,
+                        elevation: 0,
+                        scrolledUnderElevation: 0,
+                        leading: IconButton(
+                          icon: Icon(
+                            viewModel.pathHistory.isNotEmpty
+                                ? Icons.arrow_back
+                                : Icons.close_rounded,
+                            color: Colors.white,
+                          ),
+                          onPressed: () {
+                            if (viewModel.pathHistory.isNotEmpty) {
+                              viewModel.goBack();
+                            } else {
+                              Navigator.pop(context);
+                            }
+                          },
+                        ),
+                        title: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              viewModel.selectedPaths.isEmpty
+                                  ? (viewModel.currentPath == viewModel.rootPath
+                                      ? 'Internal storage'
+                                      : viewModel.currentFolderName)
+                                  : '${viewModel.selectedPaths.length} selected',
+                              style: const TextStyle(
+                                fontFamily: AppTheme.fontBricolage,
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            Text(
+                              viewModel.selectedPaths.isEmpty
+                                  ? 'Tap files to select'
+                                  : 'Tap tick button when done',
+                              style: const TextStyle(
+                                color: Color(0xFF78828A),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          if (viewModel.selectedPaths.isNotEmpty)
+                            TextButton(
+                              onPressed: () => viewModel.clearSelection(),
+                              child: const Text(
+                                'Clear',
+                                style: TextStyle(
+                                  color: Color(0xFF78828A),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          TextButton(
+                            onPressed: () => viewModel.selectAllFiles(),
+                            child: const Text(
+                              'Select all',
+                              style: TextStyle(
+                                color: AppTheme.accentLime,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : viewModel.isSelectionMode
                     ? AppBar(
                         backgroundColor: Colors.black,
                         elevation: 0,
@@ -207,9 +317,10 @@ class _AllFilesViewState extends State<AllFilesView> {
                               ? 'Internal storage'
                               : viewModel.currentFolderName,
                           style: const TextStyle(
+                            fontFamily: AppTheme.fontBricolage,
                             color: Colors.white,
                             fontSize: 20,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: -0.3,
                           ),
                         ),
@@ -331,9 +442,11 @@ class _AllFilesViewState extends State<AllFilesView> {
               ),
               bottomNavigationBar: viewModel.isPasteMode
                   ? _buildPasteNavBar(context, viewModel)
-                  : viewModel.isSelectionMode
-                  ? _buildSelectionNavBar(context, viewModel)
-                  : null,
+                  : (viewModel.isFilePickerMode
+                      ? null
+                      : (viewModel.isSelectionMode
+                          ? _buildSelectionNavBar(context, viewModel)
+                          : null)),
               body: Builder(
                 builder: (context) {
                   if (viewModel.isSearchMode) {
@@ -1260,7 +1373,7 @@ class _AllFilesViewState extends State<AllFilesView> {
                           style: TextStyle(
                             color: Colors.black,
                             fontSize: 16,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             letterSpacing: -0.2,
                           ),
                         ),
@@ -1532,9 +1645,10 @@ class _AllFilesViewState extends State<AllFilesView> {
                 Text(
                   title,
                   style: const TextStyle(
+                    fontFamily: AppTheme.fontBricolage,
                     color: Colors.white,
                     fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.3,
                   ),
                   maxLines: 1,
@@ -1807,9 +1921,10 @@ class _AllFilesViewState extends State<AllFilesView> {
                           Text(
                             name,
                             style: const TextStyle(
+                              fontFamily: AppTheme.fontBricolage,
                               color: Colors.white,
                               fontSize: 22,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: -0.3,
                             ),
                             maxLines: 1,
@@ -1924,7 +2039,13 @@ class _FileListItem extends StatelessWidget {
       children: [
         InkWell(
           onTap: () {
-            if (viewModel.isSelectionMode ||
+            if (viewModel.isFilePickerMode) {
+              if (item.isDirectory) {
+                viewModel.navigateTo(item.path);
+              } else {
+                viewModel.toggleSelection(item.path);
+              }
+            } else if (viewModel.isSelectionMode ||
                 (viewModel.isFolderPickerMode && item.isDirectory)) {
               viewModel.toggleSelection(item.path);
             } else if (item.isDirectory) {
@@ -1934,7 +2055,7 @@ class _FileListItem extends StatelessWidget {
             }
           },
           onLongPress: () {
-            if (!viewModel.isSelectionMode) {
+            if (!viewModel.isFilePickerMode && !viewModel.isSelectionMode) {
               viewModel.toggleSelectionMode();
               viewModel.toggleSelection(item.path);
             }
@@ -1973,11 +2094,32 @@ class _FileListItem extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (viewModel.isSelectionMode ||
+                if (viewModel.isFilePickerMode)
+                  if (item.isDirectory)
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Color(0xFF4A525A),
+                      size: 20,
+                    )
+                  else
+                    Icon(
+                      isSelected
+                          ? Icons.check_circle_rounded
+                          : Icons.radio_button_unchecked,
+                      color: isSelected
+                          ? AppTheme.accentLime
+                          : const Color(0xFF4A525A),
+                      size: 22,
+                    )
+                else if (viewModel.isSelectionMode ||
                     (viewModel.isFolderPickerMode && item.isDirectory))
                   Icon(
-                    isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-                    color: isSelected ? AppTheme.accentLime : const Color(0xFF4A525A),
+                    isSelected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked,
+                    color: isSelected
+                        ? AppTheme.accentLime
+                        : const Color(0xFF4A525A),
                     size: 22,
                   )
                 else
@@ -2034,7 +2176,13 @@ class _FileGridItem extends StatelessWidget {
 
     return InkWell(
       onTap: () {
-        if (viewModel.isSelectionMode ||
+        if (viewModel.isFilePickerMode) {
+          if (item.isDirectory) {
+            viewModel.navigateTo(item.path);
+          } else {
+            viewModel.toggleSelection(item.path);
+          }
+        } else if (viewModel.isSelectionMode ||
             (viewModel.isFolderPickerMode && item.isDirectory)) {
           viewModel.toggleSelection(item.path);
         } else if (item.isDirectory) {
@@ -2044,7 +2192,7 @@ class _FileGridItem extends StatelessWidget {
         }
       },
       onLongPress: () {
-        if (!viewModel.isSelectionMode) {
+        if (!viewModel.isFilePickerMode && !viewModel.isSelectionMode) {
           viewModel.toggleSelectionMode();
           viewModel.toggleSelection(item.path);
         }
@@ -2091,7 +2239,8 @@ class _FileGridItem extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
-                    if (viewModel.isSelectionMode) ...[
+                    if (viewModel.isSelectionMode ||
+                        (viewModel.isFilePickerMode && !item.isDirectory)) ...[
                       const SizedBox(width: 4),
                       Icon(
                         isSelected
@@ -2108,6 +2257,16 @@ class _FileGridItem extends StatelessWidget {
               ],
             ),
             if (viewModel.isFolderPickerMode && item.isDirectory)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(
+                  isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+                  color: isSelected ? AppTheme.accentLime : const Color(0xFF4A525A),
+                  size: 20,
+                ),
+              ),
+            if (viewModel.isFilePickerMode && !item.isDirectory)
               Positioned(
                 top: 4,
                 right: 4,

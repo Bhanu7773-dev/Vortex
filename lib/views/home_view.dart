@@ -177,9 +177,10 @@ class _HomeViewState extends State<HomeView> {
                   const Text(
                     'Vortex',
                     style: TextStyle(
+                      fontFamily: AppTheme.fontBricolage,
                       color: Colors.white,
                       fontSize: 30,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -258,7 +259,7 @@ class _HomeViewState extends State<HomeView> {
                         style: TextStyle(
                           color: AppTheme.textMuted,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       Container(
@@ -282,7 +283,7 @@ class _HomeViewState extends State<HomeView> {
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                             SizedBox(width: 3),
@@ -304,9 +305,10 @@ class _HomeViewState extends State<HomeView> {
                       Text(
                         freeSpace,
                         style: const TextStyle(
+                          fontFamily: AppTheme.fontBricolage,
                           color: Colors.white,
                           fontSize: 48,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: -1.2,
                           height: 1.0,
                         ),
@@ -315,9 +317,10 @@ class _HomeViewState extends State<HomeView> {
                       const Text(
                         'GB',
                         style: TextStyle(
+                          fontFamily: AppTheme.fontBricolage,
                           color: Colors.white,
                           fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const Spacer(),
@@ -326,7 +329,7 @@ class _HomeViewState extends State<HomeView> {
                         style: const TextStyle(
                           color: AppTheme.textMuted,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ],
@@ -370,15 +373,16 @@ class _HomeViewState extends State<HomeView> {
                         style: const TextStyle(
                           color: AppTheme.textMuted,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       Text(
                         '${(viewModel.storagePercentage * 100).toInt()}%',
                         style: const TextStyle(
+                          fontFamily: AppTheme.fontBricolage,
                           color: AppTheme.textMuted,
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -423,16 +427,17 @@ class _HomeViewState extends State<HomeView> {
                                 style: TextStyle(
                                   color: Colors.black,
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 photoCount,
                                 style: const TextStyle(
+                                  fontFamily: AppTheme.fontBricolage,
                                   color: Colors.black,
                                   fontSize: 36,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                   height: 1.1,
                                 ),
                               ),
@@ -475,16 +480,17 @@ class _HomeViewState extends State<HomeView> {
                                 style: TextStyle(
                                   color: AppTheme.textMuted,
                                   fontSize: 16,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 videoCount,
                                 style: const TextStyle(
+                                  fontFamily: AppTheme.fontBricolage,
                                   color: Colors.white,
                                   fontSize: 36,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                   height: 1.1,
                                 ),
                               ),
@@ -693,7 +699,7 @@ class _HomeViewState extends State<HomeView> {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -702,7 +708,7 @@ class _HomeViewState extends State<HomeView> {
               style: const TextStyle(
                 color: AppTheme.textMuted,
                 fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -746,7 +752,7 @@ class _HomeViewState extends State<HomeView> {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 15,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],

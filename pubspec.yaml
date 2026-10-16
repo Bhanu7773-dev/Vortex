@@ -63,3 +63,15 @@ flutter:
 
   assets:
     - assets/vortex-icon-dark.png
+
+  fonts:
+    - family: Bricolage Grotesque
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque-Regular.ttf
+        - asset: assets/fonts/BricolageGrotesque-Bold.ttf
+          weight: 700
+    - family: Instrument Sans
+      fonts:
+        - asset: assets/fonts/InstrumentSans-Regular.ttf
+        - asset: assets/fonts/InstrumentSans-Bold.ttf
+          weight: 700

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:vortex/theme/app_theme.dart';
 import 'package:vortex/views/all_files_view.dart';
 
 class StorageCard extends StatefulWidget {
@@ -153,9 +154,10 @@ class _StorageCardState extends State<StorageCard> with SingleTickerProviderStat
                           return Text(
                             '${(_percentAnim.value * 100).toStringAsFixed(0)}%',
                             style: TextStyle(
+                              fontFamily: AppTheme.fontBricolage,
                               color: storageColor,
                               fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w700,
                             ),
                           );
                         },

@@ -33,15 +33,16 @@ class _TagSelectionSheetState extends State<TagSelectionSheet> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 22),
         actionsPadding: const EdgeInsets.fromLTRB(22, 16, 22, 20),
         title: Row(
-          children: const [
-            Icon(Icons.bookmark_add_outlined, color: AppTheme.accentLime, size: 24),
-            SizedBox(width: 12),
+          children: [
+            const Icon(Icons.bookmark_add_outlined, color: AppTheme.accentLime, size: 24),
+            const SizedBox(width: 12),
             Text(
               'New tag',
               style: TextStyle(
+                fontFamily: AppTheme.fontBricolage,
                 color: Colors.white,
                 fontSize: 19,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -77,7 +78,7 @@ class _TagSelectionSheetState extends State<TagSelectionSheet> {
               style: TextStyle(
                 color: Color(0xFF78828A),
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
@@ -99,7 +100,7 @@ class _TagSelectionSheetState extends State<TagSelectionSheet> {
                 'Save',
                 style: TextStyle(
                   color: Colors.black,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   fontSize: 14,
                 ),
               ),
@@ -140,15 +141,16 @@ class _TagSelectionSheetState extends State<TagSelectionSheet> {
             ),
             const SizedBox(height: 18),
             Row(
-              children: const [
-                Icon(Icons.bookmark_border_rounded, color: AppTheme.accentLime, size: 22),
-                SizedBox(width: 10),
+              children: [
+                const Icon(Icons.bookmark_border_rounded, color: AppTheme.accentLime, size: 22),
+                const SizedBox(width: 10),
                 Text(
                   'Select tag',
                   style: TextStyle(
+                    fontFamily: AppTheme.fontBricolage,
                     color: Colors.white,
                     fontSize: 20,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -168,7 +170,7 @@ class _TagSelectionSheetState extends State<TagSelectionSheet> {
                     ),
                     labelStyle: const TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                     onPressed: () {
                       widget.onTagSelected(tag);

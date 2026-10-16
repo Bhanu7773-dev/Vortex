@@ -517,8 +517,9 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
             child: Text(
               modeTitle,
               style: const TextStyle(
+                fontFamily: AppTheme.fontBricolage,
                 fontSize: 24,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
                 color: Colors.white,
                 letterSpacing: -0.4,
               ),
@@ -547,7 +548,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                         style: TextStyle(
                           color: Colors.black,
                           fontSize: 15,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -647,8 +648,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                         ? Colors.black
                         : const Color(0xFF78828A),
                     fontSize: 13,
-                    fontWeight:
-                        isSelected ? FontWeight.w800 : FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
@@ -797,8 +797,9 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
           Text(
             _myDeviceName,
             style: const TextStyle(
+              fontFamily: AppTheme.fontBricolage,
               fontSize: 20,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
               color: Colors.white,
               letterSpacing: -0.3,
             ),
@@ -817,7 +818,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                       style: TextStyle(
                         color: Color(0xFF78828A),
                         fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     Text(
@@ -825,7 +826,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -841,7 +842,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                         style: TextStyle(
                           color: Color(0xFF78828A),
                           fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                       Text(
@@ -849,7 +850,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
@@ -864,15 +865,16 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                       style: TextStyle(
                         color: Color(0xFF78828A),
                         fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     Text(
                       _formatToken(currentToken),
                       style: const TextStyle(
+                        fontFamily: AppTheme.fontBricolage,
                         color: AppTheme.accentLime,
                         fontSize: 22,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 0.5,
                       ),
                     ),
@@ -1063,7 +1065,7 @@ class _ConnectDeviceViewState extends State<ConnectDeviceView>
                       'Connect',
                       style: TextStyle(
                         color: Colors.black,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
                     ),

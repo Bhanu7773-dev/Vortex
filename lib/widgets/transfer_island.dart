@@ -453,9 +453,10 @@ class _TransferDetailsSheetState extends State<_TransferDetailsSheet> {
                           Text(
                             title,
                             style: const TextStyle(
+                              fontFamily: AppTheme.fontBricolage,
                               color: Colors.white,
                               fontSize: 20,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: -0.3,
                             ),
                             maxLines: 1,
@@ -482,7 +483,7 @@ class _TransferDetailsSheetState extends State<_TransferDetailsSheet> {
                                 style: const TextStyle(
                                   color: Color(0xFF78828A),
                                   fontSize: 13,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w400,
                                 ),
                               ),
                             ],
@@ -509,7 +510,7 @@ class _TransferDetailsSheetState extends State<_TransferDetailsSheet> {
                   style: TextStyle(
                     color: Color(0xFF78828A),
                     fontSize: 13,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -520,9 +521,10 @@ class _TransferDetailsSheetState extends State<_TransferDetailsSheet> {
                     Text(
                       speedNum,
                       style: const TextStyle(
+                        fontFamily: AppTheme.fontBricolage,
                         color: Colors.white,
                         fontSize: 52,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -1.5,
                         height: 1.0,
                       ),
@@ -533,7 +535,7 @@ class _TransferDetailsSheetState extends State<_TransferDetailsSheet> {
                       style: const TextStyle(
                         color: Color(0xFF78828A),
                         fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],
@@ -570,15 +572,16 @@ class _TransferDetailsSheetState extends State<_TransferDetailsSheet> {
                       style: const TextStyle(
                         color: Color(0xFF78828A),
                         fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                     Text(
                       '${(progress * 100).toInt()}%',
                       style: const TextStyle(
+                        fontFamily: AppTheme.fontBricolage,
                         color: Colors.white,
                         fontSize: 26,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: -0.5,
                       ),
                     ),

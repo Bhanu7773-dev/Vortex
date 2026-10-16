@@ -133,9 +133,10 @@ class VideosView extends StatelessWidget {
                   const Text(
                     'Videos',
                     style: TextStyle(
+                      fontFamily: AppTheme.fontBricolage,
                       color: Colors.white,
                       fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                       letterSpacing: -0.3,
                     ),
                   ),
@@ -145,7 +146,7 @@ class VideosView extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFF78828A),
                       fontSize: 13,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -497,13 +498,20 @@ class VideoAlbumDetailView extends StatelessWidget {
           Text(
             album.name,
             style: const TextStyle(
+              fontFamily: AppTheme.fontBricolage,
               color: Colors.white,
-              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
             ),
           ),
           Text(
             '${album.count} items',
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+            ),
           ),
         ],
       ),

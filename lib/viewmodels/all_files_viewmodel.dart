@@ -17,12 +17,16 @@ class AllFilesViewModel extends ChangeNotifier {
   final StorageService _storageService = StorageService();
   List<String> pathHistory = [];
   bool isFolderPickerMode;
+  bool isFilePickerMode;
   final PersistenceService _persistenceService = PersistenceService();
   bool _disposed = false;
 
-  AllFilesViewModel({String? initialPath, this.isFolderPickerMode = false})
-    : currentPath = initialPath ?? '/storage/emulated/0',
-      rootPath = '/storage/emulated/0' {
+  AllFilesViewModel({
+    String? initialPath,
+    this.isFolderPickerMode = false,
+    this.isFilePickerMode = false,
+  })  : currentPath = initialPath ?? '/storage/emulated/0',
+        rootPath = '/storage/emulated/0' {
     if (initialPath != null) {
       if (!initialPath.startsWith('/storage/emulated/0')) {
         final parts = initialPath.split('/');
@@ -554,6 +558,15 @@ class AllFilesViewModel extends ChangeNotifier {
 
   void selectAll() {
     selectedPaths = items.map((e) => e.path).toSet();
+    if (!_disposed) notifyListeners();
+  }
+
+  void selectAllFiles() {
+    for (final item in items) {
+      if (!item.isDirectory) {
+        selectedPaths.add(item.path);
+      }
+    }
     if (!_disposed) notifyListeners();
   }
 

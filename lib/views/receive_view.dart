@@ -26,9 +26,10 @@ class ReceiveView extends StatelessWidget {
         title: const Text(
           'Incoming files',
           style: TextStyle(
+            fontFamily: AppTheme.fontBricolage,
             color: Colors.white,
             fontSize: 22,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             letterSpacing: -0.3,
           ),
         ),
@@ -168,9 +169,10 @@ class ReceiveView extends StatelessWidget {
         Text(
           '$count',
           style: TextStyle(
+            fontFamily: AppTheme.fontBricolage,
             color: count > 0 ? color : const Color(0xFF78828A),
             fontSize: 22,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             letterSpacing: -0.5,
           ),
         ),
@@ -180,7 +182,7 @@ class ReceiveView extends StatelessWidget {
           style: const TextStyle(
             color: Color(0xFF78828A),
             fontSize: 13,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ],
