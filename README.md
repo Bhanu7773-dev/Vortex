@@ -20,7 +20,7 @@
 
 <br>
 
-<img src="docs/banner.png" alt="Vortex app banner" width="100%">
+<img src="assets/vortex-screenshots/vortex-telegram-banner.png" alt="Vortex app banner" width="100%">
 
 </div>
 
@@ -88,19 +88,19 @@ Sending a file to another device should not need an internet connection, a cloud
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/01-home.png" width="220" alt="Home"><br><sub><b>Home</b></sub></td>
-    <td align="center"><img src="docs/screenshots/02-transfer-progress.png" width="220" alt="Transfer progress"><br><sub><b>Transfer in progress</b></sub></td>
-    <td align="center"><img src="docs/screenshots/03-transfer-details.png" width="220" alt="Transfer details"><br><sub><b>Transfer details</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/01-home.png" width="220" alt="Home"><br><sub><b>Home</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/02-transfer-progress.png" width="220" alt="Transfer progress"><br><sub><b>Transfer in progress</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/03-transfer-details.png" width="220" alt="Transfer details"><br><sub><b>Transfer details</b></sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/04-connect-and-share.png" width="220" alt="Connect and share"><br><sub><b>Connect and share</b></sub></td>
-    <td align="center"><img src="docs/screenshots/05-web-share-portal.png" width="220" alt="Web share portal"><br><sub><b>Web share portal</b></sub></td>
-    <td align="center"><img src="docs/screenshots/08-my-qr.png" width="220" alt="QR pairing"><br><sub><b>QR pairing</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/04-connect-and-share.png" width="220" alt="Connect and share"><br><sub><b>Connect and share</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/05-web-share-portal.png" width="220" alt="Web share portal"><br><sub><b>Web share portal</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/08-my-qr.png" width="220" alt="QR pairing"><br><sub><b>QR pairing</b></sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/06-select-folders.png" width="220" alt="Select folders"><br><sub><b>Select and manage</b></sub></td>
-    <td align="center"><img src="docs/screenshots/07-apks.png" width="220" alt="APK list"><br><sub><b>APKs</b></sub></td>
-    <td align="center"><img src="docs/screenshots/09-about.png" width="220" alt="About"><br><sub><b>About</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/06-select-folders.png" width="220" alt="Select folders"><br><sub><b>Select and manage</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/07-apks.png" width="220" alt="APK list"><br><sub><b>APKs</b></sub></td>
+    <td align="center"><img src="assets/vortex-screenshots/09-about.png" width="220" alt="About"><br><sub><b>About</b></sub></td>
   </tr>
 </table>
 </div>
